@@ -1,0 +1,74 @@
+# Overview
+This project will implement a VS Code Extension. 
+The purpose of the extension is to manage the definition of the Elastic Cloud run-time artifacts.
+
+Initially this project will focus on managing Elastic Fleet Agent Policies.
+
+The intent of the extension is to provide a way to maintin the infrastructure as code definitions, without a developer needing to understand the exact json structure of every API's Payload.
+
+It will allow the developed a design-time experience equivalent to managing an Elastic CLoud deployment via Click-Ops.
+
+The Extension should use the VS Code Extension [Tree View API](https://code.visualstudio.com/api/extension-guides/tree-view) to allow developers to navigate the Elastic Code Project. Within the tree view thay should be able select an artifact to edit it, or have the option to create a new artifact of that type. 
+
+Where artifacts are defined in JSON format, the extension should deliver a structured maintainance screen that removes the need for developers to edit the JSON directly - the UI should provide a structured editing experience and save to required JSON file format.
+
+
+`/Elastic_Source` - this is the root of the elastic "project" this extension will manage. This folder should be able to be edited in the Extensions configuration, but default to the value `Elastic_Source`. See https://code.visualstudio.com/api/references/contribution-points#contributes.configuration 
+
+`/Elastic_Source/Logical_Environments/master_definition.yaml` this YAML file contains the definition of the project artifacts that will be deployed to Elastic Cloud. It should mimic the folder structure employed.
+
+`/Elastic_Source/Fleet_Proxies/` - this folder contains a set of json files, each of which defines an on-prem Proxy server that can be referenced by a Fleet_Download_source
+```json
+{
+    "id": "aa409131-e0d3-42c6-b68a-8218273b1b87",
+    "name": "WNP Proxy",
+    "url": "http://the-proxy-server.internal.example.com:3128",
+    "certificate_authorities": "",
+    "certificates": "",
+    "certificate_key": "",
+    "is_preconfigured": false
+}
+```
+* The ID is a guid and should be generated when the extension user adds a new Fleet Proxy definition. This should be read-only for the Extension User.
+* The extension should validate the url attribute value is a valid URL before saving.
+
+`/Elastic_Source/Fleet_Download_Sources/`- this folder defines the Elastic Fleet Download Sources that can be referenced by a Fleet Agent Policy. Each Download Source is defined in a json file that 
+```json
+{
+    "id": "45ce4467-501f-49a6-94b9-682cf5c04928",
+    "name": "On-Prem Download Source",
+    "host": "https://artifacts.elastic.co/downhload",
+    "is_default": false,
+    "proxy_id": "aa409131-e0d3-42c6-b68a-8218273b1b87"
+}
+```
+* The id attribute is a GUID that should be generated whenever a new Download Source is added. It should be read-only for the extension  user.
+* The proxy_id value should be a drop down of the proxies defined in the project, or able to be left blank. The drop down should display the proxy's "name" attribute value, but save the proxy's id attribute. 
+
+
+ `/Elastic_Source/Fleet_Agent_Policies` this folder contains a sub folder per Fleet Agent Policy to be deployed to Elastic Cloud. Inside each Agent Policies' folder will be another json file named the same as the Folder eg `/Elastic_Source/Fleet_Agent_Policies/CMT Default/CMT Default.json`
+
+ The structure of the json (eg for the `CMT Default.json` above) should be in the same json needed to upload to the Elastic Cloud API (see [Create Agent Policies](https://www.elastic.co/docs/api/doc/serverless/operation/operation-post-fleet-agent-policies)) 
+
+ ```json
+ {
+  "id": "a80475ca-e57f-475b-a313-120d4a30bc2a",
+  "name": "CMT Default",
+  "description": "Default Agent Policy for CMT servers",
+  "monitoring_enabled": [
+    "logs",
+    "metrics"
+  ],
+  "inactivity_timeout": 1209600,
+  "download_source_id": "45ce4467-501f-49a6-94b9-682cf5c04928",
+  "schema_vertsion": "1.1.1",
+  "namespace": "cmtdev",
+  "advanced_settings": {
+    "agent_logging_level"
+  }
+  "namespace": "default"
+}
+```
+* The folder name/file name must be the same as the name attribute.
+* The id should be generated if the extension user adds a new agent policy and read only.
+* The download_source_id value should be a drop down of the dowload sources defined in the project, or able to be left blank. The drop down should display the download sources name but save the download source's id attribute value.
