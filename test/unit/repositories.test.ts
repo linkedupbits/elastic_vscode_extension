@@ -10,6 +10,7 @@ import {
   IngestPipelineDefinition,
   IntegrationPolicy,
   RoleDefinition,
+  RoleMappingDefinition,
 } from '../../src/models';
 import {
   ArtifactConflictError,
@@ -21,6 +22,7 @@ import {
   deleteIngestPipeline,
   deleteIntegrationPolicy,
   deleteRole,
+  deleteRoleMapping,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
@@ -31,6 +33,7 @@ import {
   listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
+  listRoleMappings,
   listRoles,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
@@ -40,6 +43,7 @@ import {
   saveIngestPipeline,
   saveIntegrationPolicy,
   saveRole,
+  saveRoleMapping,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -117,6 +121,15 @@ function roleFixture(overrides: Partial<RoleDefinition> = {}): RoleDefinition {
   return {
     name: 'cmt_read_only',
     cluster: ['monitor'],
+    ...overrides,
+  };
+}
+
+function roleMappingFixture(overrides: Partial<RoleMappingDefinition> = {}): RoleMappingDefinition {
+  return {
+    name: 'cmt_ldap_admins',
+    roles: ['cmt_read_only'],
+    rules: { field: { username: '*' } },
     ...overrides,
   };
 }
@@ -794,6 +807,76 @@ describe('repositories', () => {
     it('deletes a role file', async () => {
       const filePath = await saveRole(undefined, roleFixture());
       await deleteRole(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Role Mappings ----------
+
+  describe('Role Mappings', () => {
+    it('saves a new role mapping as <name>.json', async () => {
+      const filePath = await saveRoleMapping(undefined, roleMappingFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings', 'cmt_ldap_admins.json'));
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved role mappings sorted by name', async () => {
+      await saveRoleMapping(undefined, roleMappingFixture({ name: 'zeta-mapping' }));
+      await saveRoleMapping(undefined, roleMappingFixture({ name: 'alpha-mapping' }));
+
+      const mappings = await listRoleMappings();
+      expect(mappings.map((m) => m.data.name)).toEqual(['alpha-mapping', 'zeta-mapping']);
+    });
+
+    it('returns [] when the Role_Mappings folder does not exist yet', async () => {
+      expect(await listRoleMappings()).toEqual([]);
+    });
+
+    it('renames the file when an existing role mapping is saved under a new name', async () => {
+      const original = roleMappingFixture();
+      const originalPath = await saveRoleMapping(undefined, original);
+
+      const renamedPath = await saveRoleMapping(originalPath, { ...original, name: 'renamed-mapping' });
+
+      expect(renamedPath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings', 'renamed-mapping.json'));
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a role mapping without changing its name overwrites the same file (no duplicate)', async () => {
+      const original = roleMappingFixture();
+      const originalPath = await saveRoleMapping(undefined, original);
+
+      const resavedPath = await saveRoleMapping(originalPath, { ...original, enabled: false });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listRoleMappings()).length).toBe(1);
+    });
+
+    it('rejects saving a role mapping whose name collides with a different existing role mapping', async () => {
+      await saveRoleMapping(undefined, roleMappingFixture({ name: 'taken-name' }));
+
+      await expect(saveRoleMapping(undefined, roleMappingFixture({ name: 'taken-name' }))).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+    });
+
+    it('persists optional enabled/role_templates/metadata fields', async () => {
+      const full = roleMappingFixture({
+        enabled: false,
+        role_templates: [{ template: { source: '{{username}}' }, format: 'string' }],
+        metadata: { managed_by: 'cmt' },
+      });
+      const filePath = await saveRoleMapping(undefined, full);
+
+      const [saved] = await listRoleMappings();
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a role mapping file', async () => {
+      const filePath = await saveRoleMapping(undefined, roleMappingFixture());
+      await deleteRoleMapping(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

@@ -271,3 +271,33 @@ The structure of the json follows the request body of the [Put Role API](https:/
   * Any row-based list may be left empty (the corresponding key is omitted from the saved json entirely), but any row that's present must have its required fields filled in before saving.
 * **Metadata** (`metadata`) remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema (the same rationale as `_meta` elsewhere in this project).
 * **Global Privileges** (`global`) also remains a free-form optional JSON editor, since Elasticsearch's "global"/conditional privilege shape (e.g. nested application-management conditions) is itself open-ended and not practical to curate.
+
+`/Elastic_Source/Role_Mappings/` - this folder contains a set of json files, each of which defines an Elasticsearch role mapping, associating authenticated users with roles based on matching rules. Each role mapping is defined in a json file named the same as its `name` attribute, eg `/Elastic_Source/Role_Mappings/cmt_ldap_admins.json`.
+
+The structure of the json follows the request body of the [Put Role Mapping API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role-mapping) directly (there's no wrapper key), with `name` added at the top level since the API takes the role mapping name from the URL path rather than the body:
+```json
+{
+  "name": "cmt_ldap_admins",
+  "enabled": true,
+  "roles": ["cmt_read_only"],
+  "role_templates": [
+    { "template": { "source": "{{#tokenize \"groups\"}}{{.}}{{/tokenize}}" }, "format": "json" }
+  ],
+  "rules": {
+    "all": [
+      { "field": { "realm.name": "ldap1" } },
+      { "field": { "groups": "cn=admins,dc=example,dc=com" } }
+    ]
+  },
+  "metadata": {
+    "managed_by": "cmt"
+  }
+}
+```
+* The file name must be the same as the `name` attribute.
+* **Enabled** is a checkbox, checked by default (Elasticsearch's own default); it's omitted from the saved json when checked and only written out as an explicit `false` when unchecked.
+* **Roles** is an optional newline-separated list of existing role names, mirroring the stringArray convention used for Role's Cluster Privileges/Run As.
+* **Role Templates** (`role_templates`) is a repeatable list of rows, each with a required **Template** (a Mustache template string, saved as `{"source": "<template>"}`) and an optional **Format** dropdown (`(default)` / `string` / `json`) - an alternative to a fixed Roles list for computing role names dynamically from user attributes (see `src/roleMappings/roleTemplateRowTemplate.ts`).
+* At least one of **Roles** or **Role Templates** must be provided before saving, since a mapping that grants nothing has no effect.
+* **Rules** (`rules`) is a required JSON object - Elasticsearch's rule tree is a genuinely recursive/open-ended boolean expression (`field`, `except`, `all`, `any`), much like a Query DSL object, so unlike the rest of this shape it isn't practical to curate as structured fields and is left as a JSON editor.
+* **Metadata** (`metadata`) remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema (the same rationale as `_meta`/Role's `metadata` elsewhere in this project).

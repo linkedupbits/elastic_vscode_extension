@@ -7,6 +7,7 @@ import {
   getIndexLifecyclePoliciesDir,
   getIndexTemplatesDir,
   getIngestPipelinesDir,
+  getRoleMappingsDir,
   getRolesDir,
   NoWorkspaceError,
 } from '../../src/config';
@@ -77,6 +78,10 @@ describe('config', () => {
       expect(getRolesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Roles'));
     });
 
+    it('getRoleMappingsDir', () => {
+      expect(getRoleMappingsDir()).toBe(path.join('/ws', 'Elastic_Source', 'Role_Mappings'));
+    });
+
     it('each helper propagates NoWorkspaceError when the workspace closes', () => {
       __resetWorkspace();
       expect(() => getFleetProxiesDir()).toThrow(NoWorkspaceError);
@@ -86,6 +91,7 @@ describe('config', () => {
       expect(() => getIngestPipelinesDir()).toThrow(NoWorkspaceError);
       expect(() => getIndexTemplatesDir()).toThrow(NoWorkspaceError);
       expect(() => getRolesDir()).toThrow(NoWorkspaceError);
+      expect(() => getRoleMappingsDir()).toThrow(NoWorkspaceError);
     });
   });
 });

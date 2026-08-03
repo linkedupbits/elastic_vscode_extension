@@ -176,3 +176,24 @@ export interface RoleDefinition {
   metadata?: Record<string, unknown>;
   global?: Record<string, unknown>;
 }
+
+/**
+ * Body shape of the Elasticsearch Put Role Mapping API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role-mapping).
+ * Maps directly onto the real API body - there's no wrapper key - except for `name`, which
+ * isn't part of the body (it's the URL path segment) but is kept here since it drives the
+ * saved file name. `role_templates` is left as `Record<string, unknown>[]` since its shape is
+ * enforced/documented by ../roleMappings/roleTemplateRowTemplate.ts's form-value interface
+ * instead. `rules` is left free-form: it's a recursive boolean expression tree (`field`,
+ * `except`, `all`, `any`) whose shape is open-ended, much like a Query DSL object elsewhere in
+ * this project, so it isn't practical to curate as structured fields. `enabled` is omitted
+ * when true (Elasticsearch's own default) and only written out as an explicit `false`.
+ */
+export interface RoleMappingDefinition {
+  name: string;
+  enabled?: boolean;
+  roles?: string[];
+  role_templates?: Record<string, unknown>[];
+  rules: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}

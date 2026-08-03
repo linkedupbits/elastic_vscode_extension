@@ -10,6 +10,7 @@ import {
   saveIngestPipeline,
   saveIntegrationPolicy,
   saveRole,
+  saveRoleMapping,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -47,6 +48,7 @@ describe('ElasticTreeProvider', () => {
         'category-ingestpipelines',
         'category-indextemplates',
         'category-roles',
+        'category-rolemappings',
       ]);
     });
 
@@ -68,6 +70,7 @@ describe('ElasticTreeProvider', () => {
         'category-ingestpipelines',
         'category-indextemplates',
         'category-roles',
+        'category-rolemappings',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
@@ -77,6 +80,7 @@ describe('ElasticTreeProvider', () => {
         'Ingest Pipelines',
         'Index Templates',
         'Roles',
+        'Role Mappings',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -416,6 +420,75 @@ describe('ElasticTreeProvider', () => {
       const [item] = await provider.getChildren(category);
 
       expect(item.description).toBe('');
+    });
+  });
+
+  describe('Role Mappings category', () => {
+    it('is empty when no role mappings exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the joined roles as description', async () => {
+      await saveRoleMapping(undefined, {
+        name: 'cmt_ldap_admins',
+        roles: ['cmt_read_only', 'cmt_write'],
+        rules: { field: { username: '*' } },
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('cmt_ldap_admins');
+      expect(item.contextValue).toBe('rolemapping');
+      expect(item.artifactType).toBe('rolemapping');
+      expect(item.description).toBe('cmt_read_only, cmt_write');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'rolemapping', filePath: item.filePath });
+    });
+
+    it('falls back to a role_templates count when no roles are set', async () => {
+      await saveRoleMapping(undefined, {
+        name: 'cmt_templated',
+        role_templates: [{ template: { source: '{{username}}' } }],
+        rules: { field: { username: '*' } },
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('1 template(s)');
+    });
+
+    it('appends "(disabled)" when enabled is explicitly false', async () => {
+      await saveRoleMapping(undefined, {
+        name: 'cmt_disabled',
+        enabled: false,
+        roles: ['cmt_read_only'],
+        rules: { field: { username: '*' } },
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('cmt_read_only (disabled)');
+    });
+
+    it('treats a legacy/malformed file with no roles/role_templates key as an empty-count description', async () => {
+      const roleMappingsDir = path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings');
+      fs.mkdirSync(roleMappingsDir, { recursive: true });
+      fs.writeFileSync(path.join(roleMappingsDir, 'legacy-mapping.json'), JSON.stringify({ name: 'legacy-mapping' }));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('0 template(s)');
     });
   });
 

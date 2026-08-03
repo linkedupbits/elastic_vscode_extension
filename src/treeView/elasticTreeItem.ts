@@ -8,7 +8,8 @@ export type ArtifactType =
   | 'ilmpolicy'
   | 'ingestpipeline'
   | 'indextemplate'
-  | 'role';
+  | 'role'
+  | 'rolemapping';
 
 export class ElasticTreeItem extends vscode.TreeItem {
   constructor(

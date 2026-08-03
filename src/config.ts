@@ -50,3 +50,7 @@ export function getIndexTemplatesDir(): string {
 export function getRolesDir(): string {
   return path.join(getElasticSourceRoot(), 'Roles');
 }
+
+export function getRoleMappingsDir(): string {
+  return path.join(getElasticSourceRoot(), 'Role_Mappings');
+}

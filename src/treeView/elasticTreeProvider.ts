@@ -8,6 +8,7 @@ import {
   listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
+  listRoleMappings,
   listRoles,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
@@ -47,6 +48,11 @@ const CATEGORIES = [
     id: 'category-roles',
     label: 'Roles',
     icon: 'key',
+  },
+  {
+    id: 'category-rolemappings',
+    label: 'Role Mappings',
+    icon: 'link',
   },
 ] as const;
 
@@ -89,6 +95,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getIndexTemplateItems();
         case 'category-roles':
           return await this.getRoleItems();
+        case 'category-rolemappings':
+          return await this.getRoleMappingItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -238,6 +246,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           },
         })
     );
+  }
+
+  private async getRoleMappingItems(): Promise<ElasticTreeItem[]> {
+    const roleMappings = await listRoleMappings();
+    return roleMappings.map(({ filePath, data }) => {
+      const summary = (data.roles ?? []).join(', ') || `${(data.role_templates ?? []).length} template(s)`;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'rolemapping',
+        iconPath: new vscode.ThemeIcon('link'),
+        description: data.enabled === false ? `${summary} (disabled)` : summary,
+        filePath,
+        artifactType: 'rolemapping',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'rolemapping', filePath }],
+        },
+      });
+    });
   }
 
   private async getIntegrationPolicyItems(agentPolicyFilePath: string): Promise<ElasticTreeItem[]> {

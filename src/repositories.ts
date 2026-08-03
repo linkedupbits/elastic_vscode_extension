@@ -6,6 +6,7 @@ import {
   getIndexLifecyclePoliciesDir,
   getIndexTemplatesDir,
   getIngestPipelinesDir,
+  getRoleMappingsDir,
   getRolesDir,
 } from './config';
 import {
@@ -29,6 +30,7 @@ import {
   IntegrationPolicy,
   NamedRef,
   RoleDefinition,
+  RoleMappingDefinition,
 } from './models';
 
 export interface LoadedArtifact<T> {
@@ -372,5 +374,41 @@ export async function saveRole(existingFilePath: string | undefined, data: RoleD
 }
 
 export async function deleteRole(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Role Mappings ----------
+// Each lives as a *.json file named after its own `name` attribute.
+
+export async function listRoleMappings(): Promise<LoadedArtifact<RoleMappingDefinition>[]> {
+  const files = await listJsonFiles(getRoleMappingsDir());
+  const items = await Promise.all(
+    files.map(async (filePath) => ({ filePath, data: await readJsonFile<RoleMappingDefinition>(filePath) }))
+  );
+  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+}
+
+/**
+ * Creates or updates a Role Mapping. If the name changed on an existing role mapping, the
+ * json file is renamed to match.
+ */
+export async function saveRoleMapping(
+  existingFilePath: string | undefined,
+  data: RoleMappingDefinition
+): Promise<string> {
+  const targetFile = path.join(getRoleMappingsDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Role Mapping named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteRoleMapping(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }
