@@ -38,3 +38,7 @@ export function getFleetAgentPoliciesDir(): string {
 export function getIndexLifecyclePoliciesDir(): string {
   return path.join(getElasticSourceRoot(), 'Index_Lifecycle_Policies');
 }
+
+export function getIngestPipelinesDir(): string {
+  return path.join(getElasticSourceRoot(), 'Ingest_Pipelines');
+}

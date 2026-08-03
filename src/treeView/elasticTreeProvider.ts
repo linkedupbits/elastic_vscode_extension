@@ -5,6 +5,7 @@ import {
   listFleetDownloadSources,
   listFleetProxies,
   listIlmPolicies,
+  listIngestPipelines,
   listIntegrationPolicies,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
@@ -29,6 +30,11 @@ const CATEGORIES = [
     id: 'category-ilmpolicies',
     label: 'Index Lifecycle Policies',
     icon: 'history',
+  },
+  {
+    id: 'category-ingestpipelines',
+    label: 'Ingest Pipelines',
+    icon: 'gear',
   },
 ] as const;
 
@@ -65,6 +71,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getAgentPolicyItems();
         case 'category-ilmpolicies':
           return await this.getIlmPolicyItems();
+        case 'category-ingestpipelines':
+          return await this.getIngestPipelineItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -154,6 +162,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             command: 'elasticSource.openArtifact',
             title: 'Open',
             arguments: [{ artifactType: 'ilmpolicy', filePath }],
+          },
+        })
+    );
+  }
+
+  private async getIngestPipelineItems(): Promise<ElasticTreeItem[]> {
+    const pipelines = await listIngestPipelines();
+    return pipelines.map(
+      ({ filePath, data }) =>
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+          contextValue: 'ingestpipeline',
+          iconPath: new vscode.ThemeIcon('gear'),
+          description: data.description || `${(data.processors ?? []).length} processor(s)`,
+          filePath,
+          artifactType: 'ingestpipeline',
+          command: {
+            command: 'elasticSource.openArtifact',
+            title: 'Open',
+            arguments: [{ artifactType: 'ingestpipeline', filePath }],
           },
         })
     );

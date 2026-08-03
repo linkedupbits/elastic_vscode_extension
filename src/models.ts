@@ -99,3 +99,22 @@ export interface IlmPolicyDefinition {
   };
   integration_lifecycle_mappings: IntegrationLifecycleMapping[];
 }
+
+/**
+ * Body shape of the Elasticsearch Put Pipeline API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline).
+ * Unlike the ILM policy body, this maps directly onto the real API body - there's no wrapper
+ * key - except for `name`, which isn't part of the body (it's the URL path segment) but is
+ * kept here since it drives the saved file name. `processors`/`on_failure` are left free-form
+ * (each entry is `{ <processor_type>: { ...config } }`) since Elasticsearch supports dozens of
+ * processor types with very different configs.
+ */
+export interface IngestPipelineDefinition {
+  name: string;
+  description?: string;
+  processors: Record<string, unknown>[];
+  on_failure?: Record<string, unknown>[];
+  version?: number;
+  _meta?: Record<string, unknown>;
+  deprecated?: boolean;
+}

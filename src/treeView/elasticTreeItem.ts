@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 
-export type ArtifactType = 'proxy' | 'downloadsource' | 'agentpolicy' | 'integrationpolicy' | 'ilmpolicy';
+export type ArtifactType =
+  | 'proxy'
+  | 'downloadsource'
+  | 'agentpolicy'
+  | 'integrationpolicy'
+  | 'ilmpolicy'
+  | 'ingestpipeline';
 
 export class ElasticTreeItem extends vscode.TreeItem {
   constructor(

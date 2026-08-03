@@ -154,3 +154,36 @@ The structure of the json follows the request body of the [ILM Put Lifecycle API
   * `data_stream_type` - a dropdown restricted to `logs` or `metrics`.
   * `dataset_name`, `integration_name`, `namespace` - free text, all required for any row that exists.
   * Rows can be added/removed freely; the array may be empty. Any row that's present must have every field filled in before saving.
+
+`/Elastic_Source/Ingest_Pipelines/` - this folder contains a set of json files, each of which defines an Elasticsearch ingest pipeline. Each pipeline is defined in a json file named the same as the pipeline's `name` attribute, eg `/Elastic_Source/Ingest_Pipelines/logs-emailengine_wildfly@custom.json`.
+
+The structure of the json follows the request body of the [Put Pipeline API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline) directly (there's no wrapper key, unlike the ILM policy body), with `name` added at the top level since the API takes the pipeline name/id from the URL path rather than the body:
+```json
+{
+  "name": "logs-emailengine_wildfly@custom",
+  "description": "Adds a few custom fields before the managed pipeline runs.",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "emailengine.wildfly"
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "set": {
+        "field": "error.message",
+        "value": "{{ _ingest.on_failure_message }}"
+      }
+    }
+  ],
+  "version": 1,
+  "_meta": {
+    "managed_by": "cmt"
+  }
+}
+```
+* The file name must be the same as the `name` attribute.
+* `processors` is required and must be a non-empty JSON array. Because Elasticsearch supports dozens of processor types (`set`, `remove`, `rename`, `grok`, `dissect`, `script`, `pipeline`, `foreach`, ...) with very different configs, it - along with the optional `on_failure` array - is edited as a JSON editor rather than one input per possible processor type, mirroring how ILM's `phases`/`_meta` are handled for similarly open-ended schema. Each array entry must still be a JSON object (i.e. `{ "<processor_type>": { ...config } }`).
+* `description`, `version`, `_meta` and `deprecated` are all optional and are omitted from the saved json entirely when left blank/unset rather than being written out empty.

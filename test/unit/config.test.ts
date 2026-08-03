@@ -5,6 +5,7 @@ import {
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
   getIndexLifecyclePoliciesDir,
+  getIngestPipelinesDir,
   NoWorkspaceError,
 } from '../../src/config';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -62,12 +63,17 @@ describe('config', () => {
       );
     });
 
+    it('getIngestPipelinesDir', () => {
+      expect(getIngestPipelinesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Ingest_Pipelines'));
+    });
+
     it('each helper propagates NoWorkspaceError when the workspace closes', () => {
       __resetWorkspace();
       expect(() => getFleetProxiesDir()).toThrow(NoWorkspaceError);
       expect(() => getFleetDownloadSourcesDir()).toThrow(NoWorkspaceError);
       expect(() => getFleetAgentPoliciesDir()).toThrow(NoWorkspaceError);
       expect(() => getIndexLifecyclePoliciesDir()).toThrow(NoWorkspaceError);
+      expect(() => getIngestPipelinesDir()).toThrow(NoWorkspaceError);
     });
   });
 });

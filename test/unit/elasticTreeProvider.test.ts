@@ -6,6 +6,7 @@ import {
   saveFleetDownloadSource,
   saveFleetProxy,
   saveIlmPolicy,
+  saveIngestPipeline,
   saveIntegrationPolicy,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
@@ -41,6 +42,7 @@ describe('ElasticTreeProvider', () => {
         'category-downloadsources',
         'category-agentpolicies',
         'category-ilmpolicies',
+        'category-ingestpipelines',
       ]);
     });
 
@@ -59,12 +61,14 @@ describe('ElasticTreeProvider', () => {
         'category-downloadsources',
         'category-agentpolicies',
         'category-ilmpolicies',
+        'category-ingestpipelines',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
         'Fleet Download Sources',
         'Fleet Agent Policies',
         'Index Lifecycle Policies',
+        'Ingest Pipelines',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -262,6 +266,59 @@ describe('ElasticTreeProvider', () => {
       const [item] = await provider.getChildren(ilmCategory);
 
       expect(item.description).toBe('');
+    });
+  });
+
+  describe('Ingest Pipelines category', () => {
+    it('is empty when no pipelines exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the description field as description when set', async () => {
+      await saveIngestPipeline(undefined, {
+        name: 'logs-emailengine_wildfly@custom',
+        description: 'Adds custom fields.',
+        processors: [{ set: { field: 'event.dataset', value: 'emailengine.wildfly' } }],
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('logs-emailengine_wildfly@custom');
+      expect(item.contextValue).toBe('ingestpipeline');
+      expect(item.artifactType).toBe('ingestpipeline');
+      expect(item.description).toBe('Adds custom fields.');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'ingestpipeline', filePath: item.filePath });
+    });
+
+    it('falls back to a processor count when no description is set', async () => {
+      await saveIngestPipeline(undefined, {
+        name: 'no-description-pipeline',
+        processors: [{ set: { field: 'a', value: '1' } }, { remove: { field: 'b' } }],
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('2 processor(s)');
+    });
+
+    it('treats a legacy/malformed file with no processors key as having 0 processors', async () => {
+      const ingestDir = path.join(workspaceRoot, 'Elastic_Source', 'Ingest_Pipelines');
+      fs.mkdirSync(ingestDir, { recursive: true });
+      fs.writeFileSync(path.join(ingestDir, 'legacy-pipeline.json'), JSON.stringify({ name: 'legacy-pipeline' }));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('0 processor(s)');
     });
   });
 

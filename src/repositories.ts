@@ -4,6 +4,7 @@ import {
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
   getIndexLifecyclePoliciesDir,
+  getIngestPipelinesDir,
 } from './config';
 import {
   deleteFile,
@@ -21,6 +22,7 @@ import {
   FleetDownloadSource,
   FleetProxy,
   IlmPolicyDefinition,
+  IngestPipelineDefinition,
   IntegrationPolicy,
   NamedRef,
 } from './models';
@@ -255,5 +257,44 @@ export async function saveIlmPolicy(
 }
 
 export async function deleteIlmPolicy(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Ingest Pipelines ----------
+// Each lives as a *.json file named after its own `name` attribute.
+
+export async function listIngestPipelines(): Promise<LoadedArtifact<IngestPipelineDefinition>[]> {
+  const files = await listJsonFiles(getIngestPipelinesDir());
+  const items = await Promise.all(
+    files.map(async (filePath) => ({
+      filePath,
+      data: await readJsonFile<IngestPipelineDefinition>(filePath),
+    }))
+  );
+  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+}
+
+/**
+ * Creates or updates an Ingest Pipeline. If the name changed on an existing pipeline, the
+ * json file is renamed to match.
+ */
+export async function saveIngestPipeline(
+  existingFilePath: string | undefined,
+  data: IngestPipelineDefinition
+): Promise<string> {
+  const targetFile = path.join(getIngestPipelinesDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`An Ingest Pipeline named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteIngestPipeline(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

@@ -3,6 +3,7 @@ import { NoWorkspaceError } from './config';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
 import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
+import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './integrations/registry';
@@ -13,6 +14,7 @@ import {
   deleteFleetDownloadSource,
   deleteFleetProxy,
   deleteIlmPolicy,
+  deleteIngestPipeline,
   deleteIntegrationPolicy,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
@@ -67,6 +69,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('elasticSource.newIngestPipeline', () => {
+      try {
+        IngestPipelineEditorPanel.openNew(context.extensionUri, refresh);
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
       async (args: { artifactType: ArtifactType; filePath: string }) => {
@@ -82,6 +92,9 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           case 'ilmpolicy':
             IlmPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
+            break;
+          case 'ingestpipeline':
+            IngestPipelineEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
@@ -136,6 +149,9 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'ilmpolicy':
           await deleteIlmPolicy(item.filePath);
           break;
+        case 'ingestpipeline':
+          await deleteIngestPipeline(item.filePath);
+          break;
       }
       refresh();
     }),
@@ -156,7 +172,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const watcherGlob =
-    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies}/**/*.json';
+    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines}/**/*.json';
   const watcher = vscode.workspace.createFileSystemWatcher(watcherGlob);
   watcher.onDidCreate(() => refresh());
   watcher.onDidChange(() => refresh());

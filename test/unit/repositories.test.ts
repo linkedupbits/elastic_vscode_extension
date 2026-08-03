@@ -1,13 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { generateId } from '../../src/fileSystem';
-import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, IlmPolicyDefinition, IntegrationPolicy } from '../../src/models';
+import {
+  FleetAgentPolicy,
+  FleetDownloadSource,
+  FleetProxy,
+  IlmPolicyDefinition,
+  IngestPipelineDefinition,
+  IntegrationPolicy,
+} from '../../src/models';
 import {
   ArtifactConflictError,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
   deleteIlmPolicy,
+  deleteIngestPipeline,
   deleteIntegrationPolicy,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
@@ -16,11 +24,13 @@ import {
   listFleetDownloadSources,
   listFleetProxies,
   listIlmPolicies,
+  listIngestPipelines,
   listIntegrationPolicies,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
   saveIlmPolicy,
+  saveIngestPipeline,
   saveIntegrationPolicy,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -75,6 +85,14 @@ function ilmPolicyFixture(overrides: Partial<IlmPolicyDefinition> = {}): IlmPoli
       },
     },
     integration_lifecycle_mappings: [],
+    ...overrides,
+  };
+}
+
+function ingestPipelineFixture(overrides: Partial<IngestPipelineDefinition> = {}): IngestPipelineDefinition {
+  return {
+    name: 'logs-emailengine_wildfly@custom',
+    processors: [{ set: { field: 'event.dataset', value: 'emailengine.wildfly' } }],
     ...overrides,
   };
 }
@@ -500,6 +518,90 @@ describe('repositories', () => {
     it('deletes a policy file', async () => {
       const filePath = await saveIlmPolicy(undefined, ilmPolicyFixture());
       await deleteIlmPolicy(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Ingest Pipelines ----------
+
+  describe('Ingest Pipelines', () => {
+    it('saves a new pipeline as <name>.json', async () => {
+      const filePath = await saveIngestPipeline(undefined, ingestPipelineFixture());
+      expect(filePath).toBe(
+        path.join(
+          workspaceRoot,
+          'Elastic_Source',
+          'Ingest_Pipelines',
+          'logs-emailengine_wildfly@custom.json'
+        )
+      );
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved pipelines sorted by name', async () => {
+      await saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'zeta-pipeline' }));
+      await saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'alpha-pipeline' }));
+
+      const pipelines = await listIngestPipelines();
+      expect(pipelines.map((p) => p.data.name)).toEqual(['alpha-pipeline', 'zeta-pipeline']);
+    });
+
+    it('returns [] when the Ingest_Pipelines folder does not exist yet', async () => {
+      expect(await listIngestPipelines()).toEqual([]);
+    });
+
+    it('renames the file when an existing pipeline is saved under a new name', async () => {
+      const original = ingestPipelineFixture();
+      const originalPath = await saveIngestPipeline(undefined, original);
+
+      const renamedPath = await saveIngestPipeline(originalPath, { ...original, name: 'renamed-pipeline' });
+
+      expect(renamedPath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Ingest_Pipelines', 'renamed-pipeline.json')
+      );
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a pipeline without changing its name overwrites the same file (no duplicate)', async () => {
+      const original = ingestPipelineFixture();
+      const originalPath = await saveIngestPipeline(undefined, original);
+
+      const resavedPath = await saveIngestPipeline(originalPath, {
+        ...original,
+        processors: [{ remove: { field: 'unwanted' } }],
+      });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listIngestPipelines()).length).toBe(1);
+    });
+
+    it('rejects saving a pipeline whose name collides with a different existing pipeline', async () => {
+      await saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'taken-name' }));
+
+      await expect(
+        saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'taken-name' }))
+      ).rejects.toBeInstanceOf(ArtifactConflictError);
+    });
+
+    it('persists optional description/version/_meta/deprecated fields', async () => {
+      const full = ingestPipelineFixture({
+        description: 'Adds a few custom fields.',
+        version: 3,
+        _meta: { managed_by: 'cmt' },
+        deprecated: true,
+        on_failure: [{ set: { field: 'error.message', value: '{{ _ingest.on_failure_message }}' } }],
+      });
+      const filePath = await saveIngestPipeline(undefined, full);
+
+      const [saved] = await listIngestPipelines();
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a pipeline file', async () => {
+      const filePath = await saveIngestPipeline(undefined, ingestPipelineFixture());
+      await deleteIngestPipeline(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });
