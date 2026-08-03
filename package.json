@@ -4,6 +4,11 @@
   "description": "Manage Elastic Cloud run-time artifact definitions (Fleet Agent Policies, Download Sources, Proxies) as infrastructure-as-code, without hand-editing JSON.",
   "version": "0.1.0",
   "publisher": "elastic-source",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/linkedupbits/elastic_vscode_extension"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.85.0"
