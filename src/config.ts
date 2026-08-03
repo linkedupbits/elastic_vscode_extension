@@ -34,3 +34,7 @@ export function getFleetDownloadSourcesDir(): string {
 export function getFleetAgentPoliciesDir(): string {
   return path.join(getElasticSourceRoot(), 'Fleet_Agent_Policies');
 }
+
+export function getIndexLifecyclePoliciesDir(): string {
+  return path.join(getElasticSourceRoot(), 'Index_Lifecycle_Policies');
+}

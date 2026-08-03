@@ -102,3 +102,36 @@ The `"policy_id"` attribute and values in the array of `"policy_ids"` should be 
     "80912b12-6a5f-4bf3-b1c8-9f42667515ed"
   ],
 ```
+
+`/Elastic_Source/Index_Lifecycle_Policies/` - this folder contains a set of json files, each of which defines an Elasticsearch Index Lifecycle Management policy. Each Index Lifecycle Policy is defined in a json file named the same as the policy's `name` attribute, eg `/Elastic_Source/Index_Lifecycle_Policies/logs-default-policy.json`.
+
+The structure of the json follows the request body of the [ILM Put Lifecycle API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ilm-put-lifecycle), with `name` added at the top level since the API takes the policy name from the URL path rather than the body:
+```json
+{
+  "name": "logs-default-policy",
+  "policy": {
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": {
+            "max_primary_shard_size": "50gb",
+            "max_age": "30d"
+          },
+          "set_priority": {
+            "priority": 100
+          }
+        }
+      },
+      "delete": {
+        "min_age": "90d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}
+```
+* The file name must be the same as the `name` attribute.
+* Since the `phases`/`actions` schema is large and varies per phase, the extension exposes `phases` (and the optional `policy._meta`) as structured JSON editors rather than one input per possible action, while still validating that `phases` is a JSON object whose keys are limited to `hot`, `warm`, `cold`, `frozen`, `delete`.

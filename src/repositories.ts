@@ -3,6 +3,7 @@ import {
   getFleetAgentPoliciesDir,
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
+  getIndexLifecyclePoliciesDir,
 } from './config';
 import {
   deleteFile,
@@ -15,7 +16,14 @@ import {
   renameFolder,
   writeJsonFile,
 } from './fileSystem';
-import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, IntegrationPolicy, NamedRef } from './models';
+import {
+  FleetAgentPolicy,
+  FleetDownloadSource,
+  FleetProxy,
+  IlmPolicyDefinition,
+  IntegrationPolicy,
+  NamedRef,
+} from './models';
 
 export interface LoadedArtifact<T> {
   /** For Fleet Proxies / Download Sources: the *.json file. For Agent Policies: the *.json file inside the policy folder. */
@@ -208,5 +216,44 @@ export async function saveIntegrationPolicy(
 }
 
 export async function deleteIntegrationPolicy(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Index Lifecycle Policies ----------
+// Each lives as a *.json file named after its own `name` attribute.
+
+export async function listIlmPolicies(): Promise<LoadedArtifact<IlmPolicyDefinition>[]> {
+  const files = await listJsonFiles(getIndexLifecyclePoliciesDir());
+  const items = await Promise.all(
+    files.map(async (filePath) => ({
+      filePath,
+      data: await readJsonFile<IlmPolicyDefinition>(filePath),
+    }))
+  );
+  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+}
+
+/**
+ * Creates or updates an Index Lifecycle Policy. If the name changed on an existing policy,
+ * the json file is renamed to match.
+ */
+export async function saveIlmPolicy(
+  existingFilePath: string | undefined,
+  data: IlmPolicyDefinition
+): Promise<string> {
+  const targetFile = path.join(getIndexLifecyclePoliciesDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`An Index Lifecycle Policy named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteIlmPolicy(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

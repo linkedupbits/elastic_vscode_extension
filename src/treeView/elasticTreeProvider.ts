@@ -4,6 +4,7 @@ import {
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
+  listIlmPolicies,
   listIntegrationPolicies,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
@@ -23,6 +24,11 @@ const CATEGORIES = [
     id: 'category-agentpolicies',
     label: 'Fleet Agent Policies',
     icon: 'shield',
+  },
+  {
+    id: 'category-ilmpolicies',
+    label: 'Index Lifecycle Policies',
+    icon: 'history',
   },
 ] as const;
 
@@ -57,6 +63,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getDownloadSourceItems();
         case 'category-agentpolicies':
           return await this.getAgentPolicyItems();
+        case 'category-ilmpolicies':
+          return await this.getIlmPolicyItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -127,6 +135,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             command: 'elasticSource.openArtifact',
             title: 'Open',
             arguments: [{ artifactType: 'agentpolicy', filePath }],
+          },
+        })
+    );
+  }
+
+  private async getIlmPolicyItems(): Promise<ElasticTreeItem[]> {
+    const policies = await listIlmPolicies();
+    return policies.map(
+      ({ filePath, data }) =>
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+          contextValue: 'ilmpolicy',
+          iconPath: new vscode.ThemeIcon('history'),
+          description: Object.keys(data.policy?.phases ?? {}).join(', '),
+          filePath,
+          artifactType: 'ilmpolicy',
+          command: {
+            command: 'elasticSource.openArtifact',
+            title: 'Open',
+            arguments: [{ artifactType: 'ilmpolicy', filePath }],
           },
         })
     );

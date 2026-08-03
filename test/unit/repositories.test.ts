@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { generateId } from '../../src/fileSystem';
-import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, IntegrationPolicy } from '../../src/models';
+import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, IlmPolicyDefinition, IntegrationPolicy } from '../../src/models';
 import {
   ArtifactConflictError,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
+  deleteIlmPolicy,
   deleteIntegrationPolicy,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
@@ -14,10 +15,12 @@ import {
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
+  listIlmPolicies,
   listIntegrationPolicies,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
+  saveIlmPolicy,
   saveIntegrationPolicy,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -58,6 +61,19 @@ function agentPolicyFixture(overrides: Partial<FleetAgentPolicy> = {}): FleetAge
     schema_version: '1.1.0',
     namespace: 'default',
     advanced_settings: {},
+    ...overrides,
+  };
+}
+
+function ilmPolicyFixture(overrides: Partial<IlmPolicyDefinition> = {}): IlmPolicyDefinition {
+  return {
+    name: 'logs-default-policy',
+    policy: {
+      phases: {
+        hot: { min_age: '0ms', actions: { rollover: { max_primary_shard_size: '50gb', max_age: '30d' } } },
+        delete: { min_age: '90d', actions: { delete: {} } },
+      },
+    },
     ...overrides,
   };
 }
@@ -386,6 +402,79 @@ describe('repositories', () => {
 
     it('returns [] for an agent policy with no Integrations folder yet', async () => {
       expect(await listIntegrationPolicies(agentPolicyPath)).toEqual([]);
+    });
+  });
+
+  // ---------- Index Lifecycle Policies ----------
+
+  describe('Index Lifecycle Policies', () => {
+    it('saves a new policy as <name>.json', async () => {
+      const filePath = await saveIlmPolicy(undefined, ilmPolicyFixture());
+      expect(filePath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Index_Lifecycle_Policies', 'logs-default-policy.json')
+      );
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved policies sorted by name', async () => {
+      await saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'zeta-policy' }));
+      await saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'alpha-policy' }));
+
+      const policies = await listIlmPolicies();
+      expect(policies.map((p) => p.data.name)).toEqual(['alpha-policy', 'zeta-policy']);
+    });
+
+    it('returns [] when the Index_Lifecycle_Policies folder does not exist yet', async () => {
+      expect(await listIlmPolicies()).toEqual([]);
+    });
+
+    it('renames the file when an existing policy is saved under a new name', async () => {
+      const original = ilmPolicyFixture();
+      const originalPath = await saveIlmPolicy(undefined, original);
+
+      const renamedPath = await saveIlmPolicy(originalPath, { ...original, name: 'renamed-policy' });
+
+      expect(renamedPath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Index_Lifecycle_Policies', 'renamed-policy.json')
+      );
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a policy without changing its name overwrites the same file (no duplicate)', async () => {
+      const original = ilmPolicyFixture();
+      const originalPath = await saveIlmPolicy(undefined, original);
+
+      const resavedPath = await saveIlmPolicy(originalPath, {
+        ...original,
+        policy: { phases: { delete: { min_age: '30d', actions: { delete: {} } } } },
+      });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listIlmPolicies()).length).toBe(1);
+    });
+
+    it('rejects saving a policy whose name collides with a different existing policy', async () => {
+      await saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'taken-name' }));
+
+      await expect(saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'taken-name' }))).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+    });
+
+    it('persists an optional policy._meta object', async () => {
+      const withMeta = ilmPolicyFixture({ policy: { phases: { delete: { actions: { delete: {} } } }, _meta: { owner: 'platform-team' } } });
+      const filePath = await saveIlmPolicy(undefined, withMeta);
+
+      const [saved] = await listIlmPolicies();
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data.policy._meta).toEqual({ owner: 'platform-team' });
+    });
+
+    it('deletes a policy file', async () => {
+      const filePath = await saveIlmPolicy(undefined, ilmPolicyFixture());
+      await deleteIlmPolicy(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
     });
   });
 });

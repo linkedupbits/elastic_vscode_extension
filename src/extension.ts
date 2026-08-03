@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { NoWorkspaceError } from './config';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
+import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './integrations/registry';
@@ -11,6 +12,7 @@ import {
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
+  deleteIlmPolicy,
   deleteIntegrationPolicy,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
@@ -57,6 +59,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('elasticSource.newIndexLifecyclePolicy', () => {
+      try {
+        IlmPolicyEditorPanel.openNew(context.extensionUri, refresh);
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
       async (args: { artifactType: ArtifactType; filePath: string }) => {
@@ -69,6 +79,9 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           case 'agentpolicy':
             AgentPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
+            break;
+          case 'ilmpolicy':
+            IlmPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
@@ -120,6 +133,9 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'integrationpolicy':
           await deleteIntegrationPolicy(item.filePath);
           break;
+        case 'ilmpolicy':
+          await deleteIlmPolicy(item.filePath);
+          break;
       }
       refresh();
     }),
@@ -139,7 +155,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeWorkspaceFolders(() => refresh())
   );
 
-  const watcherGlob = '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies}/**/*.json';
+  const watcherGlob =
+    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies}/**/*.json';
   const watcher = vscode.workspace.createFileSystemWatcher(watcherGlob);
   watcher.onDidCreate(() => refresh());
   watcher.onDidChange(() => refresh());

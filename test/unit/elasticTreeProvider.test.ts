@@ -5,6 +5,7 @@ import {
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
+  saveIlmPolicy,
   saveIntegrationPolicy,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
@@ -32,13 +33,14 @@ describe('ElasticTreeProvider', () => {
   });
 
   describe('root level', () => {
-    it('shows the three top-level categories even when no workspace is open (they only fail on expand)', async () => {
+    it('shows the top-level categories even when no workspace is open (they only fail on expand)', async () => {
       vscodeMock.__resetWorkspace();
       const children = await provider.getChildren();
       expect(children.map((c) => c.contextValue)).toEqual([
         'category-proxies',
         'category-downloadsources',
         'category-agentpolicies',
+        'category-ilmpolicies',
       ]);
     });
 
@@ -50,17 +52,19 @@ describe('ElasticTreeProvider', () => {
       expect(children[0].contextValue).toBe('message');
     });
 
-    it('shows the three top-level categories, all collapsed', async () => {
+    it('shows the top-level categories, all collapsed', async () => {
       const children = await provider.getChildren();
       expect(children.map((c) => c.contextValue)).toEqual([
         'category-proxies',
         'category-downloadsources',
         'category-agentpolicies',
+        'category-ilmpolicies',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
         'Fleet Download Sources',
         'Fleet Agent Policies',
+        'Index Lifecycle Policies',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -213,6 +217,38 @@ describe('ElasticTreeProvider', () => {
       const [policyItem] = await provider.getChildren(agentPoliciesCategory);
 
       expect(await provider.getChildren(policyItem)).toEqual([]);
+    });
+  });
+
+  describe('Index Lifecycle Policies category', () => {
+    it('is empty when no policies exist', async () => {
+      const children = await provider.getChildren();
+      const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
+      expect(await provider.getChildren(ilmCategory)).toEqual([]);
+    });
+
+    it('lists saved policies as leaf items describing their phases', async () => {
+      await saveIlmPolicy(undefined, {
+        name: 'logs-default-policy',
+        policy: {
+          phases: {
+            hot: { min_age: '0ms', actions: { rollover: { max_primary_shard_size: '50gb' } } },
+            delete: { min_age: '90d', actions: { delete: {} } },
+          },
+        },
+      });
+
+      const children = await provider.getChildren();
+      const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
+      const [item] = await provider.getChildren(ilmCategory);
+
+      expect(item.label).toBe('logs-default-policy');
+      expect(item.contextValue).toBe('ilmpolicy');
+      expect(item.artifactType).toBe('ilmpolicy');
+      expect(item.description).toBe('hot, delete');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'ilmpolicy', filePath: item.filePath });
     });
   });
 

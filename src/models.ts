@@ -72,3 +72,17 @@ export interface IntegrationPolicy {
   output_id: string | null;
   vars: Record<string, VarValue>;
 }
+
+/**
+ * Body shape of the Elasticsearch ILM Put Lifecycle API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ilm-put-lifecycle).
+ * `phases` is free-form since its shape varies per phase/action; `name` is not part of the
+ * API body (it's the URL path segment) but is kept here since it drives the saved file name.
+ */
+export interface IlmPolicyDefinition {
+  name: string;
+  policy: {
+    phases: Record<string, unknown>;
+    _meta?: Record<string, unknown>;
+  };
+}
