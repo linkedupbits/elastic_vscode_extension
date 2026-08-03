@@ -22,6 +22,8 @@ other code.
   that (this extension only manages the source-of-truth files, it does not call the
   Elasticsearch/Fleet APIs itself).
 
+![alt text](docs/explorer.png)
+
 ## Supported artifact types
 
 All artifacts live under a single project root folder (`Elastic_Source` by default, see
