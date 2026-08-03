@@ -1,5 +1,12 @@
 import * as vscode from 'vscode';
 import { readJsonFile, validateArtifactName } from '../fileSystem';
+import {
+  buildProcessorsJson,
+  INGEST_PROCESSORS,
+  IngestProcessorDef,
+  IngestProcessorFormValue,
+  parseProcessorsFromRaw,
+} from '../ingest/ingestProcessorTemplate';
 import { IngestPipelineDefinition } from '../models';
 import { saveIngestPipeline } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
@@ -10,29 +17,12 @@ interface IngestPipelinePayload {
     name: string;
     description: string;
     version: string;
-    processors: string;
-    onFailure: string;
+    processors: IngestProcessorFormValue[];
+    onFailure: IngestProcessorFormValue[];
     meta: string;
     deprecated: boolean;
   };
-}
-
-function parseJsonArray(raw: string, fieldLabel: string): Record<string, unknown>[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`${fieldLabel} must be valid JSON.`);
-  }
-  if (!Array.isArray(parsed)) {
-    throw new Error(`${fieldLabel} must be a JSON array.`);
-  }
-  parsed.forEach((entry, index) => {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      throw new Error(`${fieldLabel} item ${index + 1} must be a JSON object.`);
-    }
-  });
-  return parsed as Record<string, unknown>[];
+  template: IngestProcessorDef[];
 }
 
 function parseJsonObject(raw: string, fieldLabel: string): Record<string, unknown> {
@@ -95,19 +85,19 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
         <span class="hint">Used to track/manage pipeline changes externally; not enforced by Elasticsearch.</span>
         <span class="error">Version must be a number.</span>
       </div>
-      <div class="field" id="field-processors">
-        <label for="processors">Processors</label>
-        <textarea id="processors" rows="16" spellcheck="false"></textarea>
-        <span class="hint">JSON array of processor objects, matching the "processors" body of the Put Pipeline API.</span>
-        <span class="error">Enter a valid, non-empty JSON array of processor objects.</span>
+      <div class="field">
+        <label>Processors</label>
+        <span class="hint">Runs in order against every document ingested through this pipeline.</span>
       </div>
-      <div class="field" id="field-on_failure">
-        <label for="on_failure">On Failure (optional)</label>
-        <textarea id="on_failure" rows="6" spellcheck="false"></textarea>
-        <span class="hint">JSON array of processors to run if any processor above throws an error.</span>
-        <span class="error">On Failure must be a valid JSON array of processor objects.</span>
+      <div id="processors-container"></div>
+      <button type="button" class="secondary" id="add-processor">Add Processor</button>
+      <div class="field" style="margin-top:20px">
+        <label>On Failure (optional)</label>
+        <span class="hint">Runs instead, in order, if any processor above throws an error.</span>
       </div>
-      <div class="field" id="field-meta">
+      <div id="on-failure-container"></div>
+      <button type="button" class="secondary" id="add-on-failure-processor">Add On-Failure Processor</button>
+      <div class="field" id="field-meta" style="margin-top:20px">
         <label for="meta">Metadata (optional)</label>
         <textarea id="meta" rows="4" spellcheck="false"></textarea>
         <span class="hint">Optional JSON object saved as "_meta".</span>
@@ -135,11 +125,12 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
           name: item.name,
           description: item.description ?? '',
           version: item.version !== undefined ? String(item.version) : '',
-          processors: JSON.stringify(item.processors ?? [], null, 2),
-          onFailure: item.on_failure ? JSON.stringify(item.on_failure, null, 2) : '',
+          processors: parseProcessorsFromRaw(item.processors),
+          onFailure: parseProcessorsFromRaw(item.on_failure),
           meta: item._meta ? JSON.stringify(item._meta, null, 2) : '',
           deprecated: Boolean(item.deprecated),
         },
+        template: INGEST_PROCESSORS,
       };
     }
     return {
@@ -148,11 +139,12 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
         name: '',
         description: '',
         version: '',
-        processors: '[]',
-        onFailure: '',
+        processors: [],
+        onFailure: [],
         meta: '',
         deprecated: false,
       },
+      template: INGEST_PROCESSORS,
     };
   }
 
@@ -161,8 +153,8 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
       name: string;
       description: string;
       version: string;
-      processors: string;
-      onFailure: string;
+      processors: IngestProcessorFormValue[];
+      onFailure: IngestProcessorFormValue[];
       meta: string;
       deprecated: boolean;
     };
@@ -172,13 +164,13 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
       throw new Error(nameError);
     }
 
-    const processors = parseJsonArray(data.processors ?? '', 'Processors');
+    const processors = buildProcessorsJson(data.processors ?? [], 'Processor');
     if (processors.length === 0) {
       throw new Error('At least one processor is required.');
     }
 
-    const onFailureRaw = (data.onFailure ?? '').trim();
-    const onFailure = onFailureRaw ? parseJsonArray(onFailureRaw, 'On Failure') : undefined;
+    const onFailureRows = data.onFailure ?? [];
+    const onFailure = onFailureRows.length > 0 ? buildProcessorsJson(onFailureRows, 'On-Failure Processor') : undefined;
 
     const metaRaw = (data.meta ?? '').trim();
     const meta = metaRaw ? parseJsonObject(metaRaw, 'Metadata') : undefined;

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { IngestPipelineEditorPanel } from '../../../src/editors/ingestPipelineEditorPanel';
+import { CUSTOM_PROCESSOR_ID, IngestFieldValue, IngestProcessorFormValue } from '../../../src/ingest/ingestProcessorTemplate';
 import { IngestPipelineDefinition } from '../../../src/models';
 import { saveIngestPipeline } from '../../../src/repositories';
 import { makeTempDir, removeTempDir } from '../../helpers/tempDir';
@@ -9,6 +10,42 @@ import { vscodeMock } from '../../helpers/vscodeMock';
 import { lastPanel, sendReady, sendSave } from '../../helpers/webviewPanel';
 
 const extensionUri = vscode.Uri.file('/ext');
+
+function processorRow(
+  type: string,
+  fields: Record<string, IngestFieldValue> = {},
+  overrides: Partial<IngestProcessorFormValue> = {}
+): IngestProcessorFormValue {
+  return {
+    type,
+    isCustom: false,
+    customType: '',
+    customConfig: '{}',
+    fields,
+    tag: '',
+    condition: '',
+    ignoreFailure: false,
+    ...overrides,
+  };
+}
+
+function customProcessorRow(
+  customType: string,
+  customConfig = '{}',
+  overrides: Partial<IngestProcessorFormValue> = {}
+): IngestProcessorFormValue {
+  return {
+    type: CUSTOM_PROCESSOR_ID,
+    isCustom: true,
+    customType,
+    customConfig,
+    fields: {},
+    tag: '',
+    condition: '',
+    ignoreFailure: false,
+    ...overrides,
+  };
+}
 
 describe('IngestPipelineEditorPanel', () => {
   let workspaceRoot: string;
@@ -24,20 +61,31 @@ describe('IngestPipelineEditorPanel', () => {
     removeTempDir(workspaceRoot);
   });
 
-  it('a new panel defaults to blank fields and an empty processors array', async () => {
+  it('a new panel defaults to blank fields and no processors', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const payload = (await sendReady()) as {
       isNew: boolean;
-      item: { name: string; description: string; version: string; processors: string; onFailure: string; meta: string; deprecated: boolean };
+      item: {
+        name: string;
+        description: string;
+        version: string;
+        processors: unknown[];
+        onFailure: unknown[];
+        meta: string;
+        deprecated: boolean;
+      };
+      template: { id: string }[];
     };
 
     expect(payload.isNew).toBe(true);
     expect(payload.item.name).toBe('');
-    expect(payload.item.processors).toBe('[]');
+    expect(payload.item.processors).toEqual([]);
+    expect(payload.item.onFailure).toEqual([]);
     expect(payload.item.deprecated).toBe(false);
+    expect(payload.template.some((p) => p.id === 'set')).toBe(true);
   });
 
-  it('an existing panel loads and pretty-prints the saved pipeline from disk', async () => {
+  it('an existing panel parses known processor types from disk', async () => {
     const saved: IngestPipelineDefinition = {
       name: 'logs-emailengine_wildfly@custom',
       description: 'Adds custom fields.',
@@ -56,8 +104,8 @@ describe('IngestPipelineEditorPanel', () => {
         name: string;
         description: string;
         version: string;
-        processors: string;
-        onFailure: string;
+        processors: IngestProcessorFormValue[];
+        onFailure: IngestProcessorFormValue[];
         meta: string;
         deprecated: boolean;
       };
@@ -67,13 +115,35 @@ describe('IngestPipelineEditorPanel', () => {
     expect(payload.item.name).toBe('logs-emailengine_wildfly@custom');
     expect(payload.item.description).toBe('Adds custom fields.');
     expect(payload.item.version).toBe('3');
-    expect(JSON.parse(payload.item.processors)).toEqual(saved.processors);
-    expect(JSON.parse(payload.item.onFailure)).toEqual(saved.on_failure);
+    expect(payload.item.processors).toHaveLength(1);
+    expect(payload.item.processors[0].type).toBe('set');
+    expect(payload.item.processors[0].fields.field).toBe('event.dataset');
+    expect(payload.item.onFailure).toHaveLength(1);
+    expect(payload.item.onFailure[0].type).toBe('set');
     expect(JSON.parse(payload.item.meta)).toEqual({ managed_by: 'cmt' });
     expect(payload.item.deprecated).toBe(true);
   });
 
-  it('an existing panel with only the required fields sends empty strings for the rest', async () => {
+  it('an existing panel falls back to a custom row for an uncurated processor type', async () => {
+    const filePath = await saveIngestPipeline(undefined, {
+      name: 'enrich-pipeline',
+      processors: [{ enrich: { policy_name: 'my-policy', field: 'ip', target_field: 'geo' } }],
+    });
+
+    IngestPipelineEditorPanel.openExisting(extensionUri, () => undefined, filePath);
+    const payload = (await sendReady()) as { item: { processors: IngestProcessorFormValue[] } };
+
+    expect(payload.item.processors).toHaveLength(1);
+    expect(payload.item.processors[0].isCustom).toBe(true);
+    expect(payload.item.processors[0].customType).toBe('enrich');
+    expect(JSON.parse(payload.item.processors[0].customConfig)).toEqual({
+      policy_name: 'my-policy',
+      field: 'ip',
+      target_field: 'geo',
+    });
+  });
+
+  it('an existing panel with only the required fields sends empty strings/arrays for the rest', async () => {
     const filePath = await saveIngestPipeline(undefined, {
       name: 'minimal-pipeline',
       processors: [{ set: { field: 'a', value: '1' } }],
@@ -81,26 +151,14 @@ describe('IngestPipelineEditorPanel', () => {
 
     IngestPipelineEditorPanel.openExisting(extensionUri, () => undefined, filePath);
     const payload = (await sendReady()) as {
-      item: { description: string; version: string; onFailure: string; meta: string; deprecated: boolean };
+      item: { description: string; version: string; onFailure: unknown[]; meta: string; deprecated: boolean };
     };
 
     expect(payload.item.description).toBe('');
     expect(payload.item.version).toBe('');
-    expect(payload.item.onFailure).toBe('');
+    expect(payload.item.onFailure).toEqual([]);
     expect(payload.item.meta).toBe('');
     expect(payload.item.deprecated).toBe(false);
-  });
-
-  it('an existing panel with no processors key at all (legacy/malformed file) sends an empty array', async () => {
-    const ingestDir = path.join(workspaceRoot, 'Elastic_Source', 'Ingest_Pipelines');
-    fs.mkdirSync(ingestDir, { recursive: true });
-    const filePath = path.join(ingestDir, 'legacy-pipeline.json');
-    fs.writeFileSync(filePath, JSON.stringify({ name: 'legacy-pipeline' }));
-
-    IngestPipelineEditorPanel.openExisting(extensionUri, () => undefined, filePath);
-    const payload = (await sendReady()) as { item: { processors: string } };
-
-    expect(payload.item.processors).toBe('[]');
   });
 
   it('opening the same filePath twice reveals the existing panel instead of creating a second one', async () => {
@@ -124,8 +182,8 @@ describe('IngestPipelineEditorPanel', () => {
       name: 'logs-emailengine_wildfly@custom',
       description: '',
       version: '',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
-      onFailure: '',
+      processors: [processorRow('set', { field: 'a', value: '1', override: true, ignore_empty_value: false })],
+      onFailure: [],
       meta: '',
       deprecated: false,
     });
@@ -134,18 +192,21 @@ describe('IngestPipelineEditorPanel', () => {
     const data = message.payload as IngestPipelineDefinition;
     expect(data).toEqual({
       name: 'logs-emailengine_wildfly@custom',
-      processors: [{ set: { field: 'a', value: '1' } }],
+      processors: [{ set: { field: 'a', value: '1', override: true, ignore_empty_value: false } }],
     });
   });
 
-  it('saves all optional fields when provided', async () => {
+  it('saves all optional fields, on_failure, and a custom processor type when provided', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'logs-emailengine_wildfly@custom',
       description: '  Adds custom fields.  ',
       version: '3',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
-      onFailure: JSON.stringify([{ set: { field: 'error.message', value: '{{ _ingest.on_failure_message }}' } }]),
+      processors: [
+        processorRow('set', { field: 'a', value: '1', override: true, ignore_empty_value: false }),
+        customProcessorRow('enrich', '{"policy_name": "my-policy"}'),
+      ],
+      onFailure: [processorRow('set', { field: 'error.message', value: '{{ _ingest.on_failure_message }}', override: true, ignore_empty_value: false })],
       meta: '{"managed_by": "cmt"}',
       deprecated: true,
     });
@@ -154,7 +215,13 @@ describe('IngestPipelineEditorPanel', () => {
     const data = message.payload as IngestPipelineDefinition;
     expect(data.description).toBe('Adds custom fields.');
     expect(data.version).toBe(3);
-    expect(data.on_failure).toEqual([{ set: { field: 'error.message', value: '{{ _ingest.on_failure_message }}' } }]);
+    expect(data.processors).toEqual([
+      { set: { field: 'a', value: '1', override: true, ignore_empty_value: false } },
+      { enrich: { policy_name: 'my-policy' } },
+    ]);
+    expect(data.on_failure).toEqual([
+      { set: { field: 'error.message', value: '{{ _ingest.on_failure_message }}', override: true, ignore_empty_value: false } },
+    ]);
     expect(data._meta).toEqual({ managed_by: 'cmt' });
     expect(data.deprecated).toBe(true);
   });
@@ -163,62 +230,65 @@ describe('IngestPipelineEditorPanel', () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: '',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
     });
     expect(message).toEqual({ type: 'error', message: 'Name is required.' });
   });
 
   it('treats an entirely missing name as invalid', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({ processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]) });
+    const message = await sendSave({ processors: [processorRow('set', { field: 'a', value: '1' })] });
     expect(message).toEqual({ type: 'error', message: 'Name is required.' });
   });
 
-  it('treats an entirely missing processors field as invalid (not just malformed JSON)', async () => {
+  it('rejects an entirely missing processors field', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({ name: 'p' });
-    expect(message).toEqual({ type: 'error', message: 'Processors must be valid JSON.' });
-  });
-
-  it('rejects malformed JSON in processors', async () => {
-    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({ name: 'p', processors: '{ not valid json' });
-    expect(message).toEqual({ type: 'error', message: 'Processors must be valid JSON.' });
-  });
-
-  it('rejects processors that parse but are not a JSON array', async () => {
-    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({ name: 'p', processors: '{"set": {}}' });
-    expect(message).toEqual({ type: 'error', message: 'Processors must be a JSON array.' });
-  });
-
-  it('rejects a processors array containing a non-object entry', async () => {
-    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({ name: 'p', processors: '["not-an-object"]' });
-    expect(message).toEqual({ type: 'error', message: 'Processors item 1 must be a JSON object.' });
+    expect(message).toEqual({ type: 'error', message: 'At least one processor is required.' });
   });
 
   it('rejects an empty processors array', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({ name: 'p', processors: '[]' });
+    const message = await sendSave({ name: 'p', processors: [] });
     expect(message).toEqual({ type: 'error', message: 'At least one processor is required.' });
   });
 
-  it('rejects malformed JSON in on_failure', async () => {
+  it('rejects a processor row missing a required field', async () => {
+    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
+    const message = await sendSave({ name: 'p', processors: [processorRow('set', { field: '', value: '' })] });
+    expect(message).toEqual({ type: 'error', message: 'Processor 1 (Set): "Field" is required.' });
+  });
+
+  it('rejects a custom processor row with a blank type name', async () => {
+    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
+    const message = await sendSave({ name: 'p', processors: [customProcessorRow('')] });
+    expect(message).toEqual({ type: 'error', message: 'Processor 1: Processor Type is required.' });
+  });
+
+  it('rejects a custom processor row with invalid JSON configuration', async () => {
+    IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
+    const message = await sendSave({ name: 'p', processors: [customProcessorRow('enrich', '{ not valid json')] });
+    expect(message).toEqual({ type: 'error', message: 'Processor 1 ("enrich"): Configuration must be valid JSON.' });
+  });
+
+  it('labels an invalid on_failure row distinctly from the main processors list', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'p',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
-      onFailure: '{ not valid json',
+      processors: [processorRow('set', { field: 'a', value: '1' })],
+      onFailure: [processorRow('set', { field: '', value: '' })],
     });
-    expect(message).toEqual({ type: 'error', message: 'On Failure must be valid JSON.' });
+    expect(message).toEqual({
+      type: 'error',
+      message: 'On-Failure Processor 1 (Set): "Field" is required.',
+    });
   });
 
   it('rejects malformed JSON in metadata', async () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'p',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
       meta: '{ not valid json',
     });
     expect(message).toEqual({ type: 'error', message: 'Metadata must be valid JSON.' });
@@ -228,7 +298,7 @@ describe('IngestPipelineEditorPanel', () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'p',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
       meta: '[1, 2, 3]',
     });
     expect(message).toEqual({ type: 'error', message: 'Metadata must be a JSON object.' });
@@ -238,7 +308,7 @@ describe('IngestPipelineEditorPanel', () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'p',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
       version: 'not-a-number',
     });
     expect(message).toEqual({ type: 'error', message: 'Version must be a number.' });
@@ -253,7 +323,7 @@ describe('IngestPipelineEditorPanel', () => {
 
     const message = await sendSave({
       name: 'taken-pipeline',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
     });
     expect(message).toEqual({
       type: 'error',
@@ -265,7 +335,7 @@ describe('IngestPipelineEditorPanel', () => {
     IngestPipelineEditorPanel.openNew(extensionUri, () => undefined);
     const message = await sendSave({
       name: 'logs-emailengine_wildfly@custom',
-      processors: JSON.stringify([{ set: { field: 'a', value: '1' } }]),
+      processors: [processorRow('set', { field: 'a', value: '1' })],
     });
 
     expect(message.type).toBe('saved');

@@ -213,7 +213,8 @@ details[open] > .integration-summary::before {
   transform: rotate(90deg);
 }
 
-.integration-summary input {
+.integration-summary input,
+.integration-summary select {
   width: auto;
 }
 
@@ -250,6 +251,8 @@ details[open] > .integration-summary::before {
   border-color: var(--vscode-errorForeground);
 }
 
-#add-mapping {
+#add-mapping,
+#add-processor,
+#add-on-failure-processor {
   margin-top: 10px;
 }
