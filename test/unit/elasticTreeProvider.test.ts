@@ -250,6 +250,18 @@ describe('ElasticTreeProvider', () => {
       expect(command.command).toBe('elasticSource.openArtifact');
       expect(command.arguments[0]).toEqual({ artifactType: 'ilmpolicy', filePath: item.filePath });
     });
+
+    it('falls back to an empty description for a legacy/malformed file with no policy.phases', async () => {
+      const ilmDir = path.join(workspaceRoot, 'Elastic_Source', 'Index_Lifecycle_Policies');
+      fs.mkdirSync(ilmDir, { recursive: true });
+      fs.writeFileSync(path.join(ilmDir, 'legacy-policy.json'), JSON.stringify({ name: 'legacy-policy' }));
+
+      const children = await provider.getChildren();
+      const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
+      const [item] = await provider.getChildren(ilmCategory);
+
+      expect(item.description).toBe('');
+    });
   });
 
   describe('an item with an unrecognized contextValue', () => {

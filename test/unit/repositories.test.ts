@@ -249,6 +249,14 @@ describe('repositories', () => {
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
+    it('lists agent policies sorted by name', async () => {
+      await saveFleetAgentPolicy(undefined, agentPolicyFixture({ id: generateId(), name: 'Zeta Policy' }));
+      await saveFleetAgentPolicy(undefined, agentPolicyFixture({ id: generateId(), name: 'Alpha Policy' }));
+
+      const policies = await listFleetAgentPolicies();
+      expect(policies.map((p) => p.data.name)).toEqual(['Alpha Policy', 'Zeta Policy']);
+    });
+
     it('lists policies, ignoring folders that lack the expected <foldername>.json file', async () => {
       await saveFleetAgentPolicy(undefined, agentPolicyFixture());
       fs.mkdirSync(path.join(workspaceRoot, 'Elastic_Source', 'Fleet_Agent_Policies', 'Empty Folder'), {
@@ -272,6 +280,23 @@ describe('repositories', () => {
       expect(fs.existsSync(renamedPath)).toBe(true);
       // No stale <old-name>.json left behind inside the renamed folder.
       expect(fs.readdirSync(renamedFolder)).toEqual(['CMT Renamed.json']);
+    });
+
+    it('does not delete anything extra when the passed-in existingFilePath already matches the new name', async () => {
+      // Simulates a stray/mismatched existingFilePath whose basename already equals
+      // `${data.name}.json` even though it lived in the old (pre-rename) folder - the
+      // staleFile-vs-targetFile guard should skip deletion instead of removing the file
+      // that's about to be (re)written as the actual save target.
+      const original = agentPolicyFixture();
+      const originalPath = await saveFleetAgentPolicy(undefined, original);
+      const originalFolder = path.dirname(originalPath);
+      const strayPath = path.join(originalFolder, 'CMT Renamed.json');
+      fs.writeFileSync(strayPath, JSON.stringify(original));
+
+      const renamedPath = await saveFleetAgentPolicy(strayPath, { ...original, name: 'CMT Renamed' });
+
+      expect(fs.existsSync(renamedPath)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(renamedPath, 'utf8')).name).toBe('CMT Renamed');
     });
 
     it('preserves sibling files (e.g. an Integrations folder) across a rename', async () => {

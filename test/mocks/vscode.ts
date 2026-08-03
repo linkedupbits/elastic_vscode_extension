@@ -55,11 +55,88 @@ export function __resetWorkspace(): void {
   configValues = {};
 }
 
-// ---------- window / commands (unused by the modules under test, kept minimal) ----------
+// ---------- window / commands ----------
+
+/**
+ * Minimal fake of vscode.Webview: records outgoing postMessage calls in `posted` and lets
+ * tests simulate an incoming message from the webview via `__receive`, returning whatever
+ * promise the extension host's message handler produced so tests can `await` it.
+ */
+class MockWebview {
+  html = '';
+  cspSource = 'vscode-resource:';
+  readonly posted: Array<{ type: string; [key: string]: unknown }> = [];
+  private messageHandler?: (message: unknown) => unknown;
+
+  asWebviewUri(uri: Uri): Uri {
+    return uri;
+  }
+
+  onDidReceiveMessage(handler: (message: unknown) => unknown): { dispose: () => void } {
+    this.messageHandler = handler;
+    return { dispose: () => undefined };
+  }
+
+  postMessage(message: { type: string; [key: string]: unknown }): Promise<boolean> {
+    this.posted.push(message);
+    return Promise.resolve(true);
+  }
+
+  /** Test helper: simulate the webview posting `message` to the extension host. */
+  __receive(message: unknown): unknown {
+    return this.messageHandler?.(message);
+  }
+}
+
+/** Minimal fake of vscode.WebviewPanel, returned by the mocked window.createWebviewPanel. */
+export class MockWebviewPanel {
+  readonly webview = new MockWebview();
+  title: string;
+  disposed = false;
+  revealCount = 0;
+  private disposeHandler?: () => void;
+
+  constructor(
+    public readonly viewType: string,
+    title: string,
+    public readonly viewColumn: unknown,
+    public readonly options: unknown
+  ) {
+    this.title = title;
+  }
+
+  onDidDispose(handler: () => void): { dispose: () => void } {
+    this.disposeHandler = handler;
+    return { dispose: () => undefined };
+  }
+
+  reveal(): void {
+    this.revealCount++;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.disposeHandler?.();
+  }
+}
+
+const createdWebviewPanels: MockWebviewPanel[] = [];
+
+/** Test helper: the most recently created mock webview panel (i.e. the one just opened). */
+export function __getLastCreatedWebviewPanel(): MockWebviewPanel | undefined {
+  return createdWebviewPanels[createdWebviewPanels.length - 1];
+}
+
+/** Test helper: clears the record of created webview panels between tests. */
+export function __resetWebviewPanels(): void {
+  createdWebviewPanels.length = 0;
+}
 
 export const window = {
-  createWebviewPanel: () => {
-    throw new Error('vscode.window.createWebviewPanel is not mocked; webview panels are out of unit-test scope.');
+  createWebviewPanel: (viewType: string, title: string, viewColumn: unknown, options: unknown): MockWebviewPanel => {
+    const panel = new MockWebviewPanel(viewType, title, viewColumn, options);
+    createdWebviewPanels.push(panel);
+    return panel;
   },
   showWarningMessage: async () => undefined,
   showInformationMessage: async () => undefined,

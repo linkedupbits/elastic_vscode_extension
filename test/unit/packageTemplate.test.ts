@@ -34,7 +34,7 @@ const fixtureTemplate: PackageTemplate = {
           requiresRoot: true,
           vars: [
             { key: 'path', label: 'Path', type: 'string', default: '/default', required: true },
-            { key: 'tags', label: 'Tags', type: 'stringArray', default: ['a'] },
+            { key: 'tags', label: 'Tags', type: 'stringArray', default: ['a'], required: true },
             { key: 'flag', label: 'Flag', type: 'boolean', default: false },
           ],
         },
@@ -176,9 +176,22 @@ describe('findMissingRequiredVars', () => {
   it('treats an empty array as missing for a required stringArray var', () => {
     const inputs = buildDefaultInputs(fixtureTemplate);
     inputs['fixture-alpha'].vars = { condition: 'x', mode: 'filled' };
-    inputs['fixture-alpha'].streams['fixture.two'].enabled = true;
-    inputs['fixture-alpha'].enabled = true;
-    inputs['fixture-alpha'].streams['fixture.two'].vars.count = 5;
+    inputs['fixture-alpha'].streams['fixture.one'].vars.tags = [];
+
+    expect(findMissingRequiredVars(fixtureTemplate, inputs)).toEqual(['Alpha / One: "Tags" is required.']);
+  });
+
+  it('treats an entirely missing var (undefined) as missing for a required field', () => {
+    const inputs = buildDefaultInputs(fixtureTemplate);
+    inputs['fixture-alpha'].vars = { condition: 'x' } as never; // 'mode' key omitted entirely
+
+    expect(findMissingRequiredVars(fixtureTemplate, inputs)).toEqual(['Alpha: "Mode" is required.']);
+  });
+
+  it('handles an enabled input with no `vars` section at all without throwing', () => {
+    const inputs = buildDefaultInputs(fixtureTemplate);
+    inputs['fixture-alpha'].enabled = false;
+    inputs['fixture-beta'].enabled = true;
 
     expect(findMissingRequiredVars(fixtureTemplate, inputs)).toEqual([]);
   });
