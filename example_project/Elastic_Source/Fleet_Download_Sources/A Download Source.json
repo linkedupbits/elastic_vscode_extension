@@ -1,0 +1,7 @@
+{
+  "id": "8d0a2109-6b68-4c68-a245-c82d994dc9ce",
+  "name": "A Download Source",
+  "host": "https://artifacts.elastic",
+  "is_default": false,
+  "proxy_id": "55c6aedd-2987-43a4-8129-e9802734899f"
+}

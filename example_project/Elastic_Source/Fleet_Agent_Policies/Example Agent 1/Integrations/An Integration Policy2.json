@@ -1,0 +1,270 @@
+{
+  "name": "An Integration Policy2",
+  "namespace": "",
+  "description": "",
+  "package": {
+    "name": "system",
+    "title": "System",
+    "version": "2.22.1",
+    "requires_root": true
+  },
+  "policy_id": "efbf1bb8-a932-48ee-94d9-8ff4a5a72114",
+  "policy_ids": [
+    "efbf1bb8-a932-48ee-94d9-8ff4a5a72114"
+  ],
+  "inputs": {
+    "system-logfile": {
+      "enabled": true,
+      "streams": {
+        "system.auth": {
+          "enabled": true,
+          "vars": {
+            "ignore_older": "72h",
+            "paths": [
+              "/var/log/auth.log*",
+              "/var/log/secure*"
+            ],
+            "preserve_original_event": false,
+            "tags": [
+              "system-auth"
+            ],
+            "processors": ""
+          }
+        },
+        "system.syslog": {
+          "enabled": true,
+          "vars": {
+            "paths": [
+              "/var/log/messages*",
+              "/var/log/syslog*",
+              "/var/log/system*",
+              "/var/log/maillog*"
+            ],
+            "preserve_original_event": false,
+            "tags": [],
+            "processors": "",
+            "ignore_older": "72h",
+            "exclude_files": [
+              "\\.gz$"
+            ]
+          }
+        }
+      },
+      "vars": {
+        "condition": "${host.os_version} != \"12 (bookworm)\" and (${host.os_platform} != \"amzn\" or ${host.os_version} != \"2023\")"
+      }
+    },
+    "system-journald": {
+      "enabled": true,
+      "streams": {
+        "system.auth": {
+          "enabled": true,
+          "vars": {
+            "preserve_original_event": false,
+            "paths": [],
+            "include_matches": [],
+            "processors": "",
+            "tags": []
+          }
+        },
+        "system.syslog": {
+          "enabled": true,
+          "vars": {
+            "preserve_original_event": false,
+            "paths": [],
+            "include_matches": [],
+            "processors": "",
+            "tags": []
+          }
+        }
+      },
+      "vars": {
+        "condition": "${host.os_version} == \"12 (bookworm)\" or (${host.os_platform} == \"amzn\" and ${host.os_version} == \"2023\")"
+      }
+    },
+    "system-winlog": {
+      "enabled": false,
+      "streams": {
+        "system.application": {
+          "enabled": false,
+          "vars": {
+            "preserve_original_event": false,
+            "event_id": "",
+            "ignore_older": "72h",
+            "language": 0,
+            "tags": [],
+            "processors": "",
+            "custom": "# Winlog configuration example\n#batch_read_size: 100"
+          }
+        },
+        "system.security": {
+          "enabled": false,
+          "vars": {
+            "preserve_original_event": false,
+            "event_id": "",
+            "ignore_older": "72h",
+            "language": 0,
+            "tags": [],
+            "processors": "",
+            "custom": "# Winlog configuration example\n#batch_read_size: 100"
+          }
+        },
+        "system.system": {
+          "enabled": false,
+          "vars": {
+            "preserve_original_event": false,
+            "event_id": "",
+            "ignore_older": "72h",
+            "language": 0,
+            "tags": [],
+            "processors": "",
+            "custom": "# Winlog configuration example\n#batch_read_size: 100"
+          }
+        }
+      }
+    },
+    "system-system/metrics": {
+      "enabled": true,
+      "streams": {
+        "system.core": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "core.metrics": [
+              "percentages"
+            ],
+            "tags": [],
+            "processors": "",
+            "use_performance_counters": false
+          }
+        },
+        "system.cpu": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "cpu.metrics": [
+              "percentages",
+              "normalized_percentages"
+            ],
+            "tags": [],
+            "processors": "",
+            "use_performance_counters": false
+          }
+        },
+        "system.diskio": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "diskio.include_devices": [],
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.filesystem": {
+          "enabled": true,
+          "vars": {
+            "period": "1m",
+            "filesystem.ignore_types": [],
+            "tags": [],
+            "processors": "- drop_event.when.regexp:\n    system.filesystem.mount_point: ^/(sys|cgroup|proc|dev|etc|host|lib|snap)($|/)\n"
+          }
+        },
+        "system.fsstat": {
+          "enabled": true,
+          "vars": {
+            "period": "1m",
+            "filesystem.ignore_types": [],
+            "tags": [],
+            "processors": "- drop_event.when.regexp:\n    system.fsstat.mount_point: ^/(sys|cgroup|proc|dev|etc|host|lib|snap)($|/)\n"
+          }
+        },
+        "system.load": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.memory": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.network": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "network.interfaces": [],
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.ntp": {
+          "enabled": false,
+          "vars": {
+            "period": "10s",
+            "ntp.servers": [
+              "pool.ntp.org"
+            ],
+            "ntp.timeout": "5s",
+            "ntp.version": "4",
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.process": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "process.include_top_n.by_cpu": 5,
+            "process.include_top_n.by_memory": 5,
+            "process.cmdline.cache.enabled": true,
+            "process.cgroups.enabled": false,
+            "process.env.whitelist": [],
+            "process.include_cpu_ticks": false,
+            "degrade_on_partial": false,
+            "processes": [
+              ".*"
+            ],
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.process.summary": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "degrade_on_partial": false,
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.socket_summary": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "tags": [],
+            "processors": ""
+          }
+        },
+        "system.uptime": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "tags": [],
+            "processors": ""
+          }
+        }
+      },
+      "vars": {
+        "system.hostfs": ""
+      }
+    }
+  },
+  "output_id": null,
+  "vars": {}
+}

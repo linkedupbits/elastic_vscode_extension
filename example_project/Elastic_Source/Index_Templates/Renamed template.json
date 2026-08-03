@@ -1,0 +1,6 @@
+{
+  "name": "Renamed template",
+  "index_patterns": [
+    "logs-*"
+  ]
+}

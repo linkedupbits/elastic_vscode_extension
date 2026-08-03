@@ -1,0 +1,9 @@
+{
+  "id": "55c6aedd-2987-43a4-8129-e9802734899f",
+  "name": "Internal Proxy",
+  "url": "http://proxyserver.internal.example.com:3128",
+  "certificate_authorities": "",
+  "certificates": "",
+  "certificate_key": "",
+  "is_preconfigured": false
+}

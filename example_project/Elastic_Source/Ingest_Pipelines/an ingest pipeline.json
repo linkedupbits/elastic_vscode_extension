@@ -1,0 +1,24 @@
+{
+  "name": "an ingest pipeline",
+  "processors": [
+    {
+      "set": {
+        "field": "sdsd",
+        "value": "sdfsdf",
+        "override": true,
+        "ignore_empty_value": false
+      }
+    },
+    {
+      "csv": {
+        "field": "sdfsdfs",
+        "target_fields": [
+          "sdfsdfs"
+        ]
+      }
+    }
+  ],
+  "description": "this does stuff",
+  "version": 0,
+  "deprecated": true
+}

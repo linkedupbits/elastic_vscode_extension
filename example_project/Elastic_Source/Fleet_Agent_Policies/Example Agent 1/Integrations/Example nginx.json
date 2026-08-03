@@ -1,0 +1,77 @@
+{
+  "name": "Example nginx",
+  "namespace": "",
+  "description": "",
+  "package": {
+    "name": "nginx",
+    "title": "Nginx",
+    "version": "3.2.1",
+    "requires_root": false
+  },
+  "policy_id": "efbf1bb8-a932-48ee-94d9-8ff4a5a72114",
+  "policy_ids": [
+    "efbf1bb8-a932-48ee-94d9-8ff4a5a72114"
+  ],
+  "inputs": {
+    "nginx-logfile": {
+      "enabled": true,
+      "streams": {
+        "nginx.access": {
+          "enabled": true,
+          "vars": {
+            "paths": [
+              "/var/log/nginx/access.log*"
+            ],
+            "tags": [
+              "nginx-access"
+            ],
+            "preserve_original_event": false,
+            "processors": "",
+            "ignore_older": "72h"
+          }
+        },
+        "nginx.error": {
+          "enabled": true,
+          "vars": {
+            "paths": [
+              "/var/log/nginx/error.log*"
+            ],
+            "tags": [
+              "nginx-error"
+            ],
+            "preserve_original_event": false,
+            "processors": "",
+            "ignore_older": "72h"
+          }
+        }
+      },
+      "vars": {
+        "condition": ""
+      }
+    },
+    "nginx-nginx/metrics": {
+      "enabled": true,
+      "streams": {
+        "nginx.stubstatus": {
+          "enabled": true,
+          "vars": {
+            "period": "10s",
+            "server_status_path": "/nginx_status",
+            "tags": [
+              "nginx-stubstatus"
+            ],
+            "processors": ""
+          }
+        }
+      },
+      "vars": {
+        "hosts": [
+          "http://127.0.0.1:80"
+        ],
+        "condition": ""
+      }
+    }
+  },
+  "output_id": null,
+  "vars": {}
+}
