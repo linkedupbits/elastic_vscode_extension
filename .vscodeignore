@@ -1,0 +1,10 @@
+.vscode/**
+.vscode-test/**
+src/**
+.gitignore
+tsconfig.json
+**/*.map
+**/.git/**
+node_modules/**
+!node_modules/**/*.js.LICENSE.txt
+claude.md

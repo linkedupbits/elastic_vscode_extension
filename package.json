@@ -1,0 +1,143 @@
+{
+  "name": "elastic-source-manager",
+  "displayName": "Elastic Source Manager",
+  "description": "Manage Elastic Cloud run-time artifact definitions (Fleet Agent Policies, Download Sources, Proxies) as infrastructure-as-code, without hand-editing JSON.",
+  "version": "0.1.0",
+  "publisher": "elastic-source",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Elastic Source",
+      "properties": {
+        "elasticSource.rootFolder": {
+          "type": "string",
+          "default": "Elastic_Source",
+          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources and Fleet_Agent_Policies."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "elasticSource",
+          "title": "Elastic Source",
+          "icon": "resources/elastic.svg"
+        }
+      ]
+    },
+    "views": {
+      "elasticSource": [
+        {
+          "id": "elasticSourceExplorer",
+          "name": "Elastic Source",
+          "contextualTitle": "Elastic Source"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "elasticSource.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.newFleetProxy",
+        "title": "New Fleet Proxy",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.newFleetDownloadSource",
+        "title": "New Fleet Download Source",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.newFleetAgentPolicy",
+        "title": "New Fleet Agent Policy",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.openArtifact",
+        "title": "Open",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.deleteArtifact",
+        "title": "Delete",
+        "icon": "$(trash)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.revealInExplorer",
+        "title": "Reveal in File Explorer",
+        "icon": "$(go-to-file)",
+        "category": "Elastic Source"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "elasticSource.refresh",
+          "when": "view == elasticSourceExplorer",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "elasticSource.newFleetProxy",
+          "when": "view == elasticSourceExplorer && viewItem == category-proxies",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.newFleetDownloadSource",
+          "when": "view == elasticSourceExplorer && viewItem == category-downloadsources",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.newFleetAgentPolicy",
+          "when": "view == elasticSourceExplorer && viewItem == category-agentpolicies",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.deleteArtifact",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy)",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.revealInExplorer",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy)",
+          "group": "7_modification"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "elasticSource.openArtifact",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.4.0"
+  }
+}
