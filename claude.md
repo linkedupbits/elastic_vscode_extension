@@ -61,11 +61,11 @@ Where artifacts are defined in JSON format, the extension should deliver a struc
   ],
   "inactivity_timeout": 1209600,
   "download_source_id": "45ce4467-501f-49a6-94b9-682cf5c04928",
-  "schema_vertsion": "1.1.1",
+  "schema_version": "1.1.1",
   "namespace": "cmtdev",
   "advanced_settings": {
     "agent_logging_level"
-  }
+  },
   "namespace": "default"
 }
 ```
