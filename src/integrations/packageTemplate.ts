@@ -7,6 +7,8 @@ export interface VarFieldDef {
   label: string;
   type: VarType;
   default: VarValue;
+  /** Mirrors the package manifest's `required: true`; enforced only while the owning input/stream is enabled. */
+  required?: boolean;
 }
 
 export interface StreamDef {
@@ -97,6 +99,53 @@ export function mergeInputsWithTemplate(
     };
   }
   return merged;
+}
+
+function isEmptyVarValue(value: VarValue | undefined): boolean {
+  if (value === undefined || value === null) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+  if (typeof value === 'string') {
+    return value.trim().length === 0;
+  }
+  return false;
+}
+
+/**
+ * Required-var check mirroring the package manifest's `required: true` vars. Only checks
+ * enabled inputs/streams — a disabled stream's vars don't need to be filled in.
+ */
+export function findMissingRequiredVars(
+  template: PackageTemplate,
+  inputs: Record<string, IntegrationInputValue>
+): string[] {
+  const errors: string[] = [];
+  for (const input of template.inputs) {
+    const inputVal = inputs[input.id];
+    if (!inputVal?.enabled) {
+      continue;
+    }
+    for (const field of input.vars ?? []) {
+      if (field.required && isEmptyVarValue(inputVal.vars?.[field.key])) {
+        errors.push(`${input.label}: "${field.label}" is required.`);
+      }
+    }
+    for (const stream of input.streams) {
+      const streamVal = inputVal.streams?.[stream.id];
+      if (!streamVal?.enabled) {
+        continue;
+      }
+      for (const field of stream.vars) {
+        if (field.required && isEmptyVarValue(streamVal.vars?.[field.key])) {
+          errors.push(`${input.label} / ${stream.label}: "${field.label}" is required.`);
+        }
+      }
+    }
+  }
+  return errors;
 }
 
 export function buildDefaultIntegrationPolicy(

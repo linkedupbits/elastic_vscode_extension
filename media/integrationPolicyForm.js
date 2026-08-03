@@ -33,20 +33,22 @@
   }
 
   function fieldControlHtml(field, id) {
+    const label = field.required ? `${field.label} *` : field.label;
+    const errorSpan = '<span class="error">This field is required.</span>';
     switch (field.type) {
       case 'boolean':
-        return `<div class="field">
-          <div class="checkbox-row"><input type="checkbox" id="${id}" /><label for="${id}" style="margin:0">${field.label}</label></div>
+        return `<div class="field" id="field-${id}">
+          <div class="checkbox-row"><input type="checkbox" id="${id}" /><label for="${id}" style="margin:0">${label}</label></div>
         </div>`;
       case 'number':
-        return `<div class="field"><label for="${id}">${field.label}</label><input type="number" id="${id}" /></div>`;
+        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><input type="number" id="${id}" />${errorSpan}</div>`;
       case 'multiline':
-        return `<div class="field"><label for="${id}">${field.label}</label><textarea id="${id}"></textarea></div>`;
+        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea>${errorSpan}</div>`;
       case 'stringArray':
-        return `<div class="field"><label for="${id}">${field.label}</label><textarea id="${id}"></textarea><span class="hint">One value per line.</span></div>`;
+        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea><span class="hint">One value per line.</span>${errorSpan}</div>`;
       case 'string':
       default:
-        return `<div class="field"><label for="${id}">${field.label}</label><input type="text" id="${id}" /></div>`;
+        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><input type="text" id="${id}" />${errorSpan}</div>`;
     }
   }
 
@@ -160,6 +162,39 @@
     return inputs;
   }
 
+  function isEmptyValue(value) {
+    if (value === undefined || value === null) return true;
+    if (Array.isArray(value)) return value.length === 0;
+    if (typeof value === 'string') return value.trim().length === 0;
+    return false;
+  }
+
+  /** Mirrors the server-side check: only enabled inputs/streams enforce their required vars. */
+  function validateRequired(template, inputs) {
+    let firstInvalidId = null;
+    for (const input of template.inputs) {
+      const inputVal = inputs[input.id];
+      for (const field of input.vars || []) {
+        const id = inputVarId(input, field);
+        const invalid = Boolean(field.required && inputVal.enabled && isEmptyValue(inputVal.vars[field.key]));
+        setFieldValid(id, !invalid);
+        if (invalid && !firstInvalidId) firstInvalidId = id;
+      }
+      for (const stream of input.streams) {
+        const streamVal = inputVal.streams[stream.id];
+        for (const field of stream.vars) {
+          const id = streamVarId(input, stream, field);
+          const invalid = Boolean(
+            field.required && inputVal.enabled && streamVal.enabled && isEmptyValue(streamVal.vars[field.key])
+          );
+          setFieldValid(id, !invalid);
+          if (invalid && !firstInvalidId) firstInvalidId = id;
+        }
+      }
+    }
+    return firstInvalidId;
+  }
+
   function setFieldValid(fieldId, valid) {
     document.getElementById('field-' + fieldId).classList.toggle('invalid', !valid);
   }
@@ -215,13 +250,21 @@
       return;
     }
 
+    const inputs = collectInputs(currentTemplate);
+    const firstInvalidId = validateRequired(currentTemplate, inputs);
+    if (firstInvalidId) {
+      showError('Fill in the required fields highlighted below.');
+      document.getElementById(firstInvalidId).scrollIntoView({ block: 'center' });
+      return;
+    }
+
     vscode.postMessage({
       type: 'save',
       payload: {
         name,
         namespace: namespaceField.value.trim(),
         description: descriptionField.value,
-        inputs: collectInputs(currentTemplate),
+        inputs,
         output_id: currentOutputId,
         vars: {},
       },

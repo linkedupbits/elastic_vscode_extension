@@ -1,7 +1,12 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { readJsonFile, validateArtifactName } from '../fileSystem';
-import { buildDefaultIntegrationPolicy, mergeInputsWithTemplate, PackageTemplate } from '../integrations/packageTemplate';
+import {
+  buildDefaultIntegrationPolicy,
+  findMissingRequiredVars,
+  mergeInputsWithTemplate,
+  PackageTemplate,
+} from '../integrations/packageTemplate';
 import { FleetAgentPolicy, IntegrationInputValue, IntegrationPolicy } from '../models';
 import { saveIntegrationPolicy } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
@@ -133,6 +138,11 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
       this.template,
       data.inputs
     );
+
+    const missing = findMissingRequiredVars(this.template, inputs);
+    if (missing.length > 0) {
+      throw new Error(missing.join(' '));
+    }
 
     const toSave: IntegrationPolicy = {
       name,

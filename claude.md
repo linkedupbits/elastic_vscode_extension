@@ -84,6 +84,14 @@ These are the currently supported Integration types
   * examples:
     * [system-cmt-default.json](examples/Integrations/System/system-cmt-default.json)
     * [system-cmt-timbre.json](examples/Integrations/System/system-cmt-timbre.json)
+* Nginx - https://github.com/elastic/integrations/tree/main/packages/nginx (package version 3.2.1)
+  * Inputs: `logfile` (streams: `access`, `error`) and `nginx/metrics` (stream: `stubstatus`).
+  * No example instance file exists for this package; its default field values (paths, hosts, ignore_older, etc.) were taken directly from the package's `manifest.yml` and `data_stream/*/manifest.yml` files on GitHub.
+  * `requires_root` is not declared by the manifest (unlike the System examples, which have it `true`); it is set to `false` since nginx log/metric collection does not need elevated host privileges.
+
+Each supported Integration type is described as a structural template (inputs → streams → vars, with each var's type, default value, and whether it is `required`) rather than being hand-coded field by field, so adding another Integration type mainly means transcribing its package manifest into a new template.
+
+Vars marked `required` in the source package manifest (e.g. Nginx's `paths`, `tags`, `hosts`, `period`, `server_status_path`) must be non-blank before saving, but only while their owning input/stream is enabled - a disabled input or stream is not required to have valid values.
 
 The `"policy_id"` attribute and values in the array of `"policy_ids"` should be set to be the id of the owning Agent Policy. 
 ```
