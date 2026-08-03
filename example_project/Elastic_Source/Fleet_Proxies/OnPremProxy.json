@@ -1,0 +1,9 @@
+{
+  "id": "83518a37-4f6c-4579-b4db-4c309791209d",
+  "name": "OnPremProxy",
+  "url": "http://proxy.example.com:8080",
+  "certificate_authorities": "",
+  "certificates": "",
+  "certificate_key": "",
+  "is_preconfigured": false
+}
