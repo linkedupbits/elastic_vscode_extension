@@ -7,6 +7,7 @@ import {
   getIndexLifecyclePoliciesDir,
   getIndexTemplatesDir,
   getIngestPipelinesDir,
+  getRolesDir,
   NoWorkspaceError,
 } from '../../src/config';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -72,6 +73,10 @@ describe('config', () => {
       expect(getIndexTemplatesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Index_Templates'));
     });
 
+    it('getRolesDir', () => {
+      expect(getRolesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Roles'));
+    });
+
     it('each helper propagates NoWorkspaceError when the workspace closes', () => {
       __resetWorkspace();
       expect(() => getFleetProxiesDir()).toThrow(NoWorkspaceError);
@@ -80,6 +85,7 @@ describe('config', () => {
       expect(() => getIndexLifecyclePoliciesDir()).toThrow(NoWorkspaceError);
       expect(() => getIngestPipelinesDir()).toThrow(NoWorkspaceError);
       expect(() => getIndexTemplatesDir()).toThrow(NoWorkspaceError);
+      expect(() => getRolesDir()).toThrow(NoWorkspaceError);
     });
   });
 });

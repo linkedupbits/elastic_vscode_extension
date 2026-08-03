@@ -8,6 +8,7 @@ import {
   listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
+  listRoles,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
 
@@ -41,6 +42,11 @@ const CATEGORIES = [
     id: 'category-indextemplates',
     label: 'Index Templates',
     icon: 'layers',
+  },
+  {
+    id: 'category-roles',
+    label: 'Roles',
+    icon: 'key',
   },
 ] as const;
 
@@ -81,6 +87,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getIngestPipelineItems();
         case 'category-indextemplates':
           return await this.getIndexTemplateItems();
+        case 'category-roles':
+          return await this.getRoleItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -208,6 +216,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             command: 'elasticSource.openArtifact',
             title: 'Open',
             arguments: [{ artifactType: 'indextemplate', filePath }],
+          },
+        })
+    );
+  }
+
+  private async getRoleItems(): Promise<ElasticTreeItem[]> {
+    const roles = await listRoles();
+    return roles.map(
+      ({ filePath, data }) =>
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+          contextValue: 'role',
+          iconPath: new vscode.ThemeIcon('key'),
+          description: data.description || (data.cluster ?? []).join(', '),
+          filePath,
+          artifactType: 'role',
+          command: {
+            command: 'elasticSource.openArtifact',
+            title: 'Open',
+            arguments: [{ artifactType: 'role', filePath }],
           },
         })
     );

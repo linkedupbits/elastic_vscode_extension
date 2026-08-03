@@ -232,3 +232,42 @@ The structure of the json follows the request body of the [Put Index Template AP
   * **Mappings** - **Dynamic** (dropdown: default/true/false/strict) and **Disable _source** (checkbox) at the top level, plus a repeatable list of top-level **Fields** (`properties`). Each field row has a **Field Name** and a **Type** dropdown covering the most common field types (`text`, `keyword`, `long`, `integer`, `short`, `byte`, `double`, `float`, `boolean`, `date`, `ip`, `geo_point`, `object`, `nested`, `binary`, `flattened`), each with their own curated options where relevant (`text`: Analyzer + "Add Keyword Sub-field"; `keyword`: Ignore Above; `date`: Format). A final **Custom / Other...** option covers any other field type (e.g. `dense_vector`, `search_as_you_type`, `constant_keyword`) with a free-text **Field Type** name plus a JSON **Configuration** object for that type's own parameters - this is also what a field needing nested `properties` (for `object`/`nested` types) or multi-fields beyond the single curated keyword sub-field must use, and what any field with an uncurated type falls back to when reopened, so no data is lost.
   * **Aliases** - a repeatable list of alias rows, each with an **Alias Name**, **Is Write Index** / **Is Hidden** checkboxes, an optional **Routing** field, and an optional **Filter** JSON field for the alias's Query DSL filter (left as JSON since query DSL is itself open-ended, the same rationale as `_meta`).
 * `_meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.
+
+`/Elastic_Source/Roles/` - this folder contains a set of json files, each of which defines an Elasticsearch security role. Each role is defined in a json file named the same as the role's `name` attribute, eg `/Elastic_Source/Roles/cmt_read_only.json`.
+
+The structure of the json follows the request body of the [Put Role API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role) directly (there's no wrapper key), with `name` added at the top level since the API takes the role name from the URL path rather than the body:
+```json
+{
+  "name": "cmt_read_only",
+  "description": "Read-only access to CMT logs/metrics.",
+  "cluster": ["monitor"],
+  "indices": [
+    {
+      "names": ["logs-cmt-*", "metrics-cmt-*"],
+      "privileges": ["read", "view_index_metadata"],
+      "field_security": {
+        "grant": ["*"],
+        "except": ["secrets.*"]
+      },
+      "query": "{\"match\": {\"tenant\": \"cmt\"}}"
+    }
+  ],
+  "applications": [
+    { "application": "kibana-.kibana", "privileges": ["read"], "resources": ["*"] }
+  ],
+  "run_as": ["cmt_service_account"],
+  "metadata": {
+    "managed_by": "cmt"
+  }
+}
+```
+* The file name must be the same as the `name` attribute.
+* Every field with a fixed, bounded shape is edited as a structured control rather than raw JSON (see `src/editors/roleEditorPanel.ts` and `src/roles/rolePrivilegeTemplates.ts`):
+  * **Description** is an optional free-text field.
+  * **Cluster Privileges** and **Run As** are each edited as a newline-separated list, one entry per line, mirroring the stringArray field convention used elsewhere in this project (e.g. Index Template's Index Patterns) rather than a fixed dropdown, since Elasticsearch's set of recognized cluster privilege names is large and evolves across versions.
+  * **Index Privileges** (`indices`) and **Remote Index Privileges** (`remote_indices`) are each a repeatable list of rows sharing the same structure - Remote Index Privileges add a required **Clusters** list on top - with: **Index Names/Patterns** and **Privileges** (both required newline-separated lists), an **Allow Restricted Indices** checkbox, optional **Field Security: Grant** / **Field Security: Except** newline-separated field-name lists, and an optional **Query** JSON field for the privilege's Query DSL filter (left as JSON, the same open-ended-schema rationale as Index Template alias filters).
+  * **Application Privileges** (`applications`) are a repeatable list of rows, each with a required **Application** name, and required **Privileges** / **Resources** lists.
+  * **Remote Cluster Privileges** (`remote_cluster`) are a repeatable list of rows, each with required **Clusters** and **Privileges** lists.
+  * Any row-based list may be left empty (the corresponding key is omitted from the saved json entirely), but any row that's present must have its required fields filled in before saving.
+* **Metadata** (`metadata`) remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema (the same rationale as `_meta` elsewhere in this project).
+* **Global Privileges** (`global`) also remains a free-form optional JSON editor, since Elasticsearch's "global"/conditional privilege shape (e.g. nested application-management conditions) is itself open-ended and not practical to curate.

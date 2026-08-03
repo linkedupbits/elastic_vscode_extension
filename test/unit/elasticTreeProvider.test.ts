@@ -9,6 +9,7 @@ import {
   saveIndexTemplate,
   saveIngestPipeline,
   saveIntegrationPolicy,
+  saveRole,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -45,6 +46,7 @@ describe('ElasticTreeProvider', () => {
         'category-ilmpolicies',
         'category-ingestpipelines',
         'category-indextemplates',
+        'category-roles',
       ]);
     });
 
@@ -65,6 +67,7 @@ describe('ElasticTreeProvider', () => {
         'category-ilmpolicies',
         'category-ingestpipelines',
         'category-indextemplates',
+        'category-roles',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
@@ -73,6 +76,7 @@ describe('ElasticTreeProvider', () => {
         'Index Lifecycle Policies',
         'Ingest Pipelines',
         'Index Templates',
+        'Roles',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -359,6 +363,56 @@ describe('ElasticTreeProvider', () => {
 
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('');
+    });
+  });
+
+  describe('Roles category', () => {
+    it('is empty when no roles exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-roles')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the description field as description when set', async () => {
+      await saveRole(undefined, {
+        name: 'cmt_read_only',
+        description: 'Read-only access to CMT logs/metrics.',
+        cluster: ['monitor'],
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-roles')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('cmt_read_only');
+      expect(item.contextValue).toBe('role');
+      expect(item.artifactType).toBe('role');
+      expect(item.description).toBe('Read-only access to CMT logs/metrics.');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'role', filePath: item.filePath });
+    });
+
+    it('falls back to the joined cluster privileges when no description is set', async () => {
+      await saveRole(undefined, { name: 'cmt_monitor', cluster: ['monitor', 'manage_own_api_key'] });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-roles')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('monitor, manage_own_api_key');
+    });
+
+    it('treats a legacy/malformed file with no cluster key as an empty description', async () => {
+      const rolesDir = path.join(workspaceRoot, 'Elastic_Source', 'Roles');
+      fs.mkdirSync(rolesDir, { recursive: true });
+      fs.writeFileSync(path.join(rolesDir, 'legacy-role.json'), JSON.stringify({ name: 'legacy-role' }));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(category);
 
       expect(item.description).toBe('');

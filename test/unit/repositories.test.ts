@@ -9,6 +9,7 @@ import {
   IndexTemplateDefinition,
   IngestPipelineDefinition,
   IntegrationPolicy,
+  RoleDefinition,
 } from '../../src/models';
 import {
   ArtifactConflictError,
@@ -19,6 +20,7 @@ import {
   deleteIndexTemplate,
   deleteIngestPipeline,
   deleteIntegrationPolicy,
+  deleteRole,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
@@ -29,6 +31,7 @@ import {
   listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
+  listRoles,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
@@ -36,6 +39,7 @@ import {
   saveIndexTemplate,
   saveIngestPipeline,
   saveIntegrationPolicy,
+  saveRole,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -105,6 +109,14 @@ function indexTemplateFixture(overrides: Partial<IndexTemplateDefinition> = {}):
   return {
     name: 'logs-myapp',
     index_patterns: ['logs-myapp-*'],
+    ...overrides,
+  };
+}
+
+function roleFixture(overrides: Partial<RoleDefinition> = {}): RoleDefinition {
+  return {
+    name: 'cmt_read_only',
+    cluster: ['monitor'],
     ...overrides,
   };
 }
@@ -701,6 +713,87 @@ describe('repositories', () => {
     it('deletes a template file', async () => {
       const filePath = await saveIndexTemplate(undefined, indexTemplateFixture());
       await deleteIndexTemplate(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Roles ----------
+
+  describe('Roles', () => {
+    it('saves a new role as <name>.json', async () => {
+      const filePath = await saveRole(undefined, roleFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Roles', 'cmt_read_only.json'));
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved roles sorted by name', async () => {
+      await saveRole(undefined, roleFixture({ name: 'zeta-role' }));
+      await saveRole(undefined, roleFixture({ name: 'alpha-role' }));
+
+      const roles = await listRoles();
+      expect(roles.map((r) => r.data.name)).toEqual(['alpha-role', 'zeta-role']);
+    });
+
+    it('returns [] when the Roles folder does not exist yet', async () => {
+      expect(await listRoles()).toEqual([]);
+    });
+
+    it('renames the file when an existing role is saved under a new name', async () => {
+      const original = roleFixture();
+      const originalPath = await saveRole(undefined, original);
+
+      const renamedPath = await saveRole(originalPath, { ...original, name: 'renamed-role' });
+
+      expect(renamedPath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Roles', 'renamed-role.json'));
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a role without changing its name overwrites the same file (no duplicate)', async () => {
+      const original = roleFixture();
+      const originalPath = await saveRole(undefined, original);
+
+      const resavedPath = await saveRole(originalPath, { ...original, description: 'Updated' });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listRoles()).length).toBe(1);
+    });
+
+    it('rejects saving a role whose name collides with a different existing role', async () => {
+      await saveRole(undefined, roleFixture({ name: 'taken-name' }));
+
+      await expect(saveRole(undefined, roleFixture({ name: 'taken-name' }))).rejects.toBeInstanceOf(ArtifactConflictError);
+    });
+
+    it('persists optional description/indices/remote_indices/applications/remote_cluster/run_as/metadata/global fields', async () => {
+      const full = roleFixture({
+        description: 'Read-only access to CMT logs/metrics.',
+        indices: [
+          {
+            names: ['logs-cmt-*'],
+            privileges: ['read'],
+            field_security: { grant: ['*'], except: ['secret'] },
+            query: '{"match_all": {}}',
+            allow_restricted_indices: true,
+          },
+        ],
+        remote_indices: [{ clusters: ['cluster-a'], names: ['logs-*'], privileges: ['read'] }],
+        applications: [{ application: 'kibana-.kibana', privileges: ['read'], resources: ['*'] }],
+        remote_cluster: [{ clusters: ['cluster-a'], privileges: ['monitor_enrich'] }],
+        run_as: ['cmt_service_account'],
+        metadata: { managed_by: 'cmt' },
+        global: { application: { manage: { applications: ['kibana-*'] } } },
+      });
+      const filePath = await saveRole(undefined, full);
+
+      const [saved] = await listRoles();
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a role file', async () => {
+      const filePath = await saveRole(undefined, roleFixture());
+      await deleteRole(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

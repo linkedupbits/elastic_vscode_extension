@@ -150,3 +150,29 @@ export interface IndexTemplateDefinition {
   ignore_missing_component_templates?: string[];
   deprecated?: boolean;
 }
+
+/**
+ * Body shape of the Elasticsearch Put Role API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role).
+ * Maps directly onto the real API body - there's no wrapper key - except for `name`, which
+ * isn't part of the body (it's the URL path segment) but is kept here since it drives the
+ * saved file name. `indices`/`remote_indices`/`applications`/`remote_cluster` are left as
+ * `Record<string, unknown>[]` since their structured shape is enforced/documented by
+ * ../roles/rolePrivilegeTemplates.ts's form-value interfaces instead (mirroring how
+ * `IngestPipelineDefinition.processors` is typed). `metadata` and `global` are left free-form:
+ * `metadata` is arbitrary user metadata (like `_meta` elsewhere in this project), and `global`
+ * describes conditional "global" privileges whose shape is itself open-ended (e.g. nested
+ * application-management privilege conditions), unlike the rest of this shape.
+ */
+export interface RoleDefinition {
+  name: string;
+  description?: string;
+  cluster?: string[];
+  indices?: Record<string, unknown>[];
+  remote_indices?: Record<string, unknown>[];
+  applications?: Record<string, unknown>[];
+  remote_cluster?: Record<string, unknown>[];
+  run_as?: string[];
+  metadata?: Record<string, unknown>;
+  global?: Record<string, unknown>;
+}

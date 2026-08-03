@@ -46,3 +46,7 @@ export function getIngestPipelinesDir(): string {
 export function getIndexTemplatesDir(): string {
   return path.join(getElasticSourceRoot(), 'Index_Templates');
 }
+
+export function getRolesDir(): string {
+  return path.join(getElasticSourceRoot(), 'Roles');
+}
