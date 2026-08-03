@@ -2,14 +2,19 @@ import * as vscode from 'vscode';
 import { NoWorkspaceError } from './config';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
+import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
+import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './integrations/registry';
 import { ArtifactType, ElasticTreeItem } from './treeView/elasticTreeItem';
 import { ElasticTreeProvider } from './treeView/elasticTreeProvider';
 import {
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
+  deleteIntegrationPolicy,
 } from './repositories';
+import { readJsonFile } from './fileSystem';
+import { IntegrationPolicy } from './models';
 
 function reportIfNoWorkspace(err: unknown): boolean {
   if (err instanceof NoWorkspaceError) {
@@ -54,7 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
-      (args: { artifactType: ArtifactType; filePath: string }) => {
+      async (args: { artifactType: ArtifactType; filePath: string }) => {
         switch (args.artifactType) {
           case 'proxy':
             ProxyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
@@ -65,9 +70,30 @@ export function activate(context: vscode.ExtensionContext): void {
           case 'agentpolicy':
             AgentPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
+          case 'integrationpolicy': {
+            const data = await readJsonFile<IntegrationPolicy>(args.filePath);
+            const template = resolveIntegrationTemplate(data.package?.name);
+            IntegrationPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath, template);
+            break;
+          }
         }
       }
     ),
+
+    vscode.commands.registerCommand('elasticSource.newIntegrationPolicy', async (item: ElasticTreeItem) => {
+      if (!item.filePath) {
+        return;
+      }
+      const choices = getIntegrationTemplateChoices();
+      const selected = await vscode.window.showQuickPick(choices, {
+        placeHolder: 'Select an integration type',
+      });
+      if (!selected) {
+        return;
+      }
+      const template = resolveIntegrationTemplate(selected.id);
+      IntegrationPolicyEditorPanel.openNew(context.extensionUri, refresh, item.filePath, template);
+    }),
 
     vscode.commands.registerCommand('elasticSource.deleteArtifact', async (item: ElasticTreeItem) => {
       if (!item.filePath || !item.artifactType) {
@@ -90,6 +116,9 @@ export function activate(context: vscode.ExtensionContext): void {
           break;
         case 'agentpolicy':
           await deleteFleetAgentPolicy(item.filePath);
+          break;
+        case 'integrationpolicy':
+          await deleteIntegrationPolicy(item.filePath);
           break;
       }
       refresh();

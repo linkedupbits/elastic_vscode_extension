@@ -72,3 +72,23 @@ Where artifacts are defined in JSON format, the extension should deliver a struc
 * The folder name/file name must be the same as the name attribute.
 * The id should be generated if the extension user adds a new agent policy and read only.
 * The download_source_id value should be a drop down of the dowload sources defined in the project, or able to be left blank. The drop down should display the download sources name but save the download source's id attribute value.
+
+`/Elastic_Source/Fleet_Agent_Policies/<Agent Policy>/Integrations/<Integration Policy.json>` - these files (underneath an Agent Policy) define the Elastic Integration Policies that will be deployed with the Agent Policy.
+These are JSON file.
+Each Integration Policy is defines the inputs for a specific Integration type.
+
+When adding an integraion policy to an agent policy, the Integration Type must be selected first. 
+
+These are the currently supported Integration types
+* System - https://github.com/elastic/integrations/blob/main/packages/system/manifest.yml
+  * examples:
+    * [system-cmt-default.json](examples/Integrations/System/system-cmt-default.json)
+    * [system-cmt-timbre.json](examples/Integrations/System/system-cmt-timbre.json)
+
+The `"policy_id"` attribute and values in the array of `"policy_ids"` should be set to be the id of the owning Agent Policy. 
+```
+  "policy_id": "80912b12-6a5f-4bf3-b1c8-9f42667515ed",
+  "policy_ids": [
+    "80912b12-6a5f-4bf3-b1c8-9f42667515ed"
+  ],
+```

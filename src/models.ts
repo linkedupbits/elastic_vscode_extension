@@ -39,3 +39,36 @@ export interface NamedRef {
   id: string;
   name: string;
 }
+
+export type VarValue = string | number | boolean | string[];
+
+export interface IntegrationStreamValue {
+  enabled: boolean;
+  vars: Record<string, VarValue>;
+}
+
+export interface IntegrationInputValue {
+  enabled: boolean;
+  /** Absent when the input type has no input-level vars (matches the real Fleet API payload shape). */
+  vars?: Record<string, VarValue>;
+  streams: Record<string, IntegrationStreamValue>;
+}
+
+export interface IntegrationPackageRef {
+  name: string;
+  title: string;
+  version: string;
+  requires_root: boolean;
+}
+
+export interface IntegrationPolicy {
+  name: string;
+  namespace: string;
+  description: string;
+  package: IntegrationPackageRef;
+  policy_id: string;
+  policy_ids: string[];
+  inputs: Record<string, IntegrationInputValue>;
+  output_id: string | null;
+  vars: Record<string, VarValue>;
+}

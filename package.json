@@ -68,6 +68,12 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.newIntegrationPolicy",
+        "title": "New Integration Policy",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.openArtifact",
         "title": "Open",
         "category": "Elastic Source"
@@ -110,13 +116,18 @@
           "group": "inline"
         },
         {
+          "command": "elasticSource.newIntegrationPolicy",
+          "when": "view == elasticSourceExplorer && viewItem == agentpolicy",
+          "group": "inline@1"
+        },
+        {
           "command": "elasticSource.deleteArtifact",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy)",
-          "group": "inline"
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy)",
+          "group": "inline@2"
         },
         {
           "command": "elasticSource.revealInExplorer",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy)",
           "group": "7_modification"
         }
       ],

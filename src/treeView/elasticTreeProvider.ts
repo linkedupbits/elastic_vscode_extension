@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import { NoWorkspaceError } from '../config';
-import { listFleetAgentPolicies, listFleetDownloadSources, listFleetProxies } from '../repositories';
+import {
+  listFleetAgentPolicies,
+  listFleetDownloadSources,
+  listFleetProxies,
+  listIntegrationPolicies,
+} from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
 
 const CATEGORIES = [
@@ -52,6 +57,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return this.getDownloadSourceItems();
         case 'category-agentpolicies':
           return this.getAgentPolicyItems();
+        case 'agentpolicy':
+          return this.getIntegrationPolicyItems(element.filePath as string);
         default:
           return [];
       }
@@ -110,7 +117,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     const policies = await listFleetAgentPolicies();
     return policies.map(
       ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.Collapsed, {
           contextValue: 'agentpolicy',
           iconPath: new vscode.ThemeIcon('checklist'),
           description: data.namespace,
@@ -120,6 +127,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             command: 'elasticSource.openArtifact',
             title: 'Open',
             arguments: [{ artifactType: 'agentpolicy', filePath }],
+          },
+        })
+    );
+  }
+
+  private async getIntegrationPolicyItems(agentPolicyFilePath: string): Promise<ElasticTreeItem[]> {
+    const integrations = await listIntegrationPolicies(agentPolicyFilePath);
+    return integrations.map(
+      ({ filePath, data }) =>
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+          contextValue: 'integrationpolicy',
+          iconPath: new vscode.ThemeIcon('plug'),
+          description: data.package?.title,
+          filePath,
+          artifactType: 'integrationpolicy',
+          command: {
+            command: 'elasticSource.openArtifact',
+            title: 'Open',
+            arguments: [{ artifactType: 'integrationpolicy', filePath }],
           },
         })
     );

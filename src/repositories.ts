@@ -15,7 +15,7 @@ import {
   renameFolder,
   writeJsonFile,
 } from './fileSystem';
-import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, NamedRef } from './models';
+import { FleetAgentPolicy, FleetDownloadSource, FleetProxy, IntegrationPolicy, NamedRef } from './models';
 
 export interface LoadedArtifact<T> {
   /** For Fleet Proxies / Download Sources: the *.json file. For Agent Policies: the *.json file inside the policy folder. */
@@ -134,4 +134,53 @@ export async function saveFleetAgentPolicy(
 
 export async function deleteFleetAgentPolicy(filePath: string): Promise<void> {
   await deleteFolderRecursive(path.dirname(filePath));
+}
+
+// ---------- Integration Policies ----------
+// Each lives as a *.json file inside an "Integrations" folder next to its owning Agent
+// Policy's own file, e.g. Fleet_Agent_Policies/<Policy>/Integrations/<name>.json, named
+// after its own `name` attribute.
+
+/** The Integrations folder that holds the given agent policy's integration policy files. */
+export function getIntegrationsDir(agentPolicyFilePath: string): string {
+  return path.join(path.dirname(agentPolicyFilePath), 'Integrations');
+}
+
+export async function listIntegrationPolicies(
+  agentPolicyFilePath: string
+): Promise<LoadedArtifact<IntegrationPolicy>[]> {
+  const files = await listJsonFiles(getIntegrationsDir(agentPolicyFilePath));
+  const items = await Promise.all(
+    files.map(async (filePath) => ({ filePath, data: await readJsonFile<IntegrationPolicy>(filePath) }))
+  );
+  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+}
+
+/**
+ * Creates or updates an integration policy inside its owning agent policy's Integrations
+ * folder. If the name changed on an existing policy, the json file is renamed to match,
+ * mirroring the name-must-match-filename rule used for Agent Policies.
+ */
+export async function saveIntegrationPolicy(
+  existingFilePath: string | undefined,
+  agentPolicyFilePath: string,
+  data: IntegrationPolicy
+): Promise<string> {
+  const targetFile = path.join(getIntegrationsDir(agentPolicyFilePath), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(
+      `An integration policy named "${data.name}" already exists in this agent policy.`
+    );
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteIntegrationPolicy(filePath: string): Promise<void> {
+  await deleteFile(filePath);
 }
