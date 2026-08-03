@@ -5,10 +5,13 @@
   const nameField = document.getElementById('name');
   const metaField = document.getElementById('meta');
   const phasesContainer = document.getElementById('phases-container');
+  const mappingsContainer = document.getElementById('mappings-container');
+  const addMappingButton = document.getElementById('add-mapping');
   const errorBanner = document.getElementById('error-banner');
   const cancelButton = document.getElementById('cancel');
 
   let currentTemplate = null;
+  let mappingRowSeq = 0;
 
   function slug(value) {
     return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -139,6 +142,52 @@
     return result;
   }
 
+  function mappingRowHtml(rowId) {
+    return `<div class="mapping-row" id="mapping-row-${rowId}" data-row-id="${rowId}">
+      <select id="mapping-type-${rowId}">
+        <option value="logs">logs</option>
+        <option value="metrics">metrics</option>
+      </select>
+      <input type="text" id="mapping-dataset-${rowId}" placeholder="Dataset Name" />
+      <input type="text" id="mapping-integration-${rowId}" placeholder="Integration Name" />
+      <input type="text" id="mapping-namespace-${rowId}" placeholder="Namespace" />
+      <button type="button" class="secondary mapping-remove">Remove</button>
+    </div>`;
+  }
+
+  function addMappingRow(mapping) {
+    const rowId = mappingRowSeq++;
+    mappingsContainer.insertAdjacentHTML('beforeend', mappingRowHtml(rowId));
+    document.getElementById(`mapping-type-${rowId}`).value = (mapping && mapping.data_stream_type) || 'logs';
+    document.getElementById(`mapping-dataset-${rowId}`).value = (mapping && mapping.dataset_name) || '';
+    document.getElementById(`mapping-integration-${rowId}`).value = (mapping && mapping.integration_name) || '';
+    document.getElementById(`mapping-namespace-${rowId}`).value = (mapping && mapping.namespace) || '';
+
+    const row = document.getElementById(`mapping-row-${rowId}`);
+    row.querySelector('.mapping-remove').addEventListener('click', () => row.remove());
+  }
+
+  function populateMappings(mappings) {
+    mappingsContainer.innerHTML = '';
+    mappingRowSeq = 0;
+    (mappings || []).forEach((m) => addMappingRow(m));
+  }
+
+  function collectMappings() {
+    return Array.from(mappingsContainer.querySelectorAll('.mapping-row')).map((row) => {
+      const rowId = row.dataset.rowId;
+      return {
+        rowId,
+        data_stream_type: document.getElementById(`mapping-type-${rowId}`).value,
+        dataset_name: document.getElementById(`mapping-dataset-${rowId}`).value.trim(),
+        integration_name: document.getElementById(`mapping-integration-${rowId}`).value.trim(),
+        namespace: document.getElementById(`mapping-namespace-${rowId}`).value.trim(),
+      };
+    });
+  }
+
+  addMappingButton.addEventListener('click', () => addMappingRow());
+
   function parseJsonObject(raw) {
     let parsed;
     try {
@@ -172,6 +221,7 @@
     metaField.value = payload.item.meta || '';
     renderTemplate(payload.template);
     populatePhases(payload.template, payload.item.phases);
+    populateMappings(payload.item.mappings);
   }
 
   window.addEventListener('message', (event) => {
@@ -212,12 +262,30 @@
       return;
     }
 
+    const mappings = collectMappings();
+    let mappingsValid = true;
+    for (const mapping of mappings) {
+      const rowValid = Boolean(mapping.dataset_name && mapping.integration_name && mapping.namespace);
+      document.getElementById(`mapping-row-${mapping.rowId}`).classList.toggle('invalid', !rowValid);
+      if (!rowValid) mappingsValid = false;
+    }
+    if (!mappingsValid) {
+      showError('Fill in Dataset Name, Integration Name and Namespace for every mapping row, or remove the row.');
+      return;
+    }
+
     vscode.postMessage({
       type: 'save',
       payload: {
         name: nameValue,
         phases,
         meta: metaField.value,
+        mappings: mappings.map(({ data_stream_type, dataset_name, integration_name, namespace }) => ({
+          data_stream_type,
+          dataset_name,
+          integration_name,
+          namespace,
+        })),
       },
     });
   });

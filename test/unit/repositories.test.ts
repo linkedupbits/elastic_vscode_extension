@@ -74,6 +74,7 @@ function ilmPolicyFixture(overrides: Partial<IlmPolicyDefinition> = {}): IlmPoli
         delete: { min_age: '90d', actions: { delete: {} } },
       },
     },
+    integration_lifecycle_mappings: [],
     ...overrides,
   };
 }

@@ -73,11 +73,23 @@ export interface IntegrationPolicy {
   vars: Record<string, VarValue>;
 }
 
+export type IlmDataStreamType = 'logs' | 'metrics';
+
+/** Maps this ILM policy onto the specific integration data streams it should apply to. */
+export interface IntegrationLifecycleMapping {
+  data_stream_type: IlmDataStreamType;
+  dataset_name: string;
+  integration_name: string;
+  namespace: string;
+}
+
 /**
  * Body shape of the Elasticsearch ILM Put Lifecycle API
  * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ilm-put-lifecycle).
  * `phases` is free-form since its shape varies per phase/action; `name` is not part of the
  * API body (it's the URL path segment) but is kept here since it drives the saved file name.
+ * `integration_lifecycle_mappings` is not part of the Elasticsearch API either - it's this
+ * project's own record of which integration data streams this policy applies to.
  */
 export interface IlmPolicyDefinition {
   name: string;
@@ -85,4 +97,5 @@ export interface IlmPolicyDefinition {
     phases: Record<string, unknown>;
     _meta?: Record<string, unknown>;
   };
+  integration_lifecycle_mappings: IntegrationLifecycleMapping[];
 }

@@ -9,7 +9,7 @@ import {
   IlmPhasesFormValue,
   parsePhasesFromRaw,
 } from '../ilm/ilmPhaseTemplate';
-import { IlmPolicyDefinition } from '../models';
+import { IlmDataStreamType, IlmPolicyDefinition, IntegrationLifecycleMapping } from '../models';
 import { saveIlmPolicy } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
@@ -19,6 +19,7 @@ interface IlmPolicyPayload {
     name: string;
     phases: IlmPhasesFormValue;
     meta: string;
+    mappings: IntegrationLifecycleMapping[];
   };
   template: IlmPhaseDef[];
 }
@@ -34,6 +35,32 @@ function parseJsonObject(raw: string, fieldLabel: string): Record<string, unknow
     throw new Error(`${fieldLabel} must be a JSON object.`);
   }
   return parsed as Record<string, unknown>;
+}
+
+const VALID_DATA_STREAM_TYPES: IlmDataStreamType[] = ['logs', 'metrics'];
+
+function parseMappings(raw: unknown): IntegrationLifecycleMapping[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((entry, index) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const dataStreamType = row.data_stream_type;
+    if (!VALID_DATA_STREAM_TYPES.includes(dataStreamType as IlmDataStreamType)) {
+      throw new Error(
+        `Integration Lifecycle Mapping ${index + 1}: Data Stream Type must be "logs" or "metrics".`
+      );
+    }
+    const datasetName = String(row.dataset_name ?? '').trim();
+    const integrationName = String(row.integration_name ?? '').trim();
+    const namespace = String(row.namespace ?? '').trim();
+    if (!datasetName || !integrationName || !namespace) {
+      throw new Error(
+        `Integration Lifecycle Mapping ${index + 1}: Dataset Name, Integration Name and Namespace are all required.`
+      );
+    }
+    return { data_stream_type: dataStreamType as IlmDataStreamType, dataset_name: datasetName, integration_name: integrationName, namespace };
+  });
 }
 
 function starterPhasesFormValue(): IlmPhasesFormValue {
@@ -84,6 +111,12 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
         <span class="error">Enter a name that is valid as a file name.</span>
       </div>
       <div id="phases-container"></div>
+      <div class="field">
+        <label>Integration Lifecycle Mappings (optional)</label>
+        <span class="hint">Maps this policy to the specific integration data streams it should apply to.</span>
+        <div id="mappings-container"></div>
+        <button type="button" class="secondary" id="add-mapping">Add Mapping</button>
+      </div>
       <div class="field" id="field-meta">
         <label for="meta">Metadata (optional)</label>
         <textarea id="meta" rows="6" spellcheck="false"></textarea>
@@ -106,19 +139,20 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
           name: item.name,
           phases: parsePhasesFromRaw(item.policy?.phases),
           meta: item.policy?._meta ? JSON.stringify(item.policy._meta, null, 2) : '',
+          mappings: item.integration_lifecycle_mappings ?? [],
         },
         template: ILM_PHASES,
       };
     }
     return {
       isNew: true,
-      item: { name: '', phases: starterPhasesFormValue(), meta: '' },
+      item: { name: '', phases: starterPhasesFormValue(), meta: '', mappings: [] },
       template: ILM_PHASES,
     };
   }
 
   protected async handleSave(payload: unknown): Promise<{ filePath: string; data: unknown }> {
-    const data = payload as { name: string; phases: IlmPhasesFormValue; meta: string };
+    const data = payload as { name: string; phases: IlmPhasesFormValue; meta: string; mappings: unknown };
     const name = (data.name ?? '').trim();
     const nameError = validateArtifactName(name);
     if (nameError) {
@@ -134,9 +168,12 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
     const metaRaw = (data.meta ?? '').trim();
     const meta = metaRaw ? parseJsonObject(metaRaw, 'Metadata') : undefined;
 
+    const mappings = parseMappings(data.mappings);
+
     const toSave: IlmPolicyDefinition = {
       name,
       policy: meta ? { phases, _meta: meta } : { phases },
+      integration_lifecycle_mappings: mappings,
     };
     const filePath = await saveIlmPolicy(this.filePath, toSave);
     this.panel.title = toSave.name;

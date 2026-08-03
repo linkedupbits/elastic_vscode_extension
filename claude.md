@@ -130,7 +130,15 @@ The structure of the json follows the request body of the [ILM Put Lifecycle API
         }
       }
     }
-  }
+  },
+  "integration_lifecycle_mappings": [
+    {
+      "data_stream_type": "logs",
+      "dataset_name": "map_python",
+      "integration_name": "filestream",
+      "namespace": "cmt"
+    }
+  ]
 }
 ```
 * The file name must be the same as the `name` attribute.
@@ -142,3 +150,7 @@ The structure of the json follows the request body of the [ILM Put Lifecycle API
   * Delete: `wait_for_snapshot` (policy), `delete` (delete_searchable_snapshot).
   * At least one phase must be enabled before saving.
 * `policy._meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.
+* `integration_lifecycle_mappings` is a top-level array (a sibling of `policy`, not part of the Elasticsearch ILM API body) recording which integration data streams this policy should apply to. It is edited as a set of repeatable rows, each with:
+  * `data_stream_type` - a dropdown restricted to `logs` or `metrics`.
+  * `dataset_name`, `integration_name`, `namespace` - free text, all required for any row that exists.
+  * Rows can be added/removed freely; the array may be empty. Any row that's present must have every field filled in before saving.

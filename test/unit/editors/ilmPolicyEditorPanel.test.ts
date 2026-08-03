@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { IlmPolicyEditorPanel } from '../../../src/editors/ilmPolicyEditorPanel';
 import { IlmPolicyDefinition } from '../../../src/models';
@@ -7,6 +9,15 @@ import { vscodeMock } from '../../helpers/vscodeMock';
 import { lastPanel, sendReady, sendSave } from '../../helpers/webviewPanel';
 
 const extensionUri = vscode.Uri.file('/ext');
+
+/** A minimal valid phases payload (only Hot enabled) reused by the mapping-focused tests below. */
+const enabledHotOnlyPhases = {
+  hot: { enabled: true, min_age: '0ms', actions: {} },
+  warm: { enabled: false, min_age: '30d', actions: {} },
+  cold: { enabled: false, min_age: '60d', actions: {} },
+  frozen: { enabled: false, min_age: '90d', actions: {} },
+  delete: { enabled: false, min_age: '90d', actions: {} },
+};
 
 describe('IlmPolicyEditorPanel', () => {
   let workspaceRoot: string;
@@ -39,6 +50,12 @@ describe('IlmPolicyEditorPanel', () => {
     expect(payload.item.phases.warm.enabled).toBe(false);
   });
 
+  it('a new panel starts with no integration lifecycle mappings', async () => {
+    IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+    const payload = (await sendReady()) as { item: { mappings: unknown[] } };
+    expect(payload.item.mappings).toEqual([]);
+  });
+
   it('an existing panel parses the saved policy.phases and policy._meta from disk', async () => {
     const saved: IlmPolicyDefinition = {
       name: 'logs-default-policy',
@@ -48,13 +65,21 @@ describe('IlmPolicyEditorPanel', () => {
         },
         _meta: { owner: 'platform-team' },
       },
+      integration_lifecycle_mappings: [
+        { data_stream_type: 'logs', dataset_name: 'map_python', integration_name: 'filestream', namespace: 'cmt' },
+      ],
     };
     const filePath = await saveIlmPolicy(undefined, saved);
 
     IlmPolicyEditorPanel.openExisting(extensionUri, () => undefined, filePath);
     const payload = (await sendReady()) as {
       isNew: boolean;
-      item: { name: string; meta: string; phases: Record<string, { enabled: boolean }> };
+      item: {
+        name: string;
+        meta: string;
+        phases: Record<string, { enabled: boolean }>;
+        mappings: { data_stream_type: string; dataset_name: string; integration_name: string; namespace: string }[];
+      };
     };
 
     expect(payload.isNew).toBe(false);
@@ -62,12 +87,31 @@ describe('IlmPolicyEditorPanel', () => {
     expect(payload.item.phases.hot.enabled).toBe(true);
     expect(payload.item.phases.warm.enabled).toBe(false);
     expect(JSON.parse(payload.item.meta)).toEqual({ owner: 'platform-team' });
+    expect(payload.item.mappings).toEqual([
+      { data_stream_type: 'logs', dataset_name: 'map_python', integration_name: 'filestream', namespace: 'cmt' },
+    ]);
+  });
+
+  it('an existing panel with no integration_lifecycle_mappings key (legacy file) sends an empty array', async () => {
+    const ilmDir = path.join(workspaceRoot, 'Elastic_Source', 'Index_Lifecycle_Policies');
+    fs.mkdirSync(ilmDir, { recursive: true });
+    const filePath = path.join(ilmDir, 'legacy-policy.json');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ name: 'legacy-policy', policy: { phases: { delete: { actions: { delete: {} } } } } })
+    );
+
+    IlmPolicyEditorPanel.openExisting(extensionUri, () => undefined, filePath);
+    const payload = (await sendReady()) as { item: { mappings: unknown[] } };
+
+    expect(payload.item.mappings).toEqual([]);
   });
 
   it('an existing panel with no policy._meta sends an empty meta string', async () => {
     const filePath = await saveIlmPolicy(undefined, {
       name: 'no-meta-policy',
       policy: { phases: { delete: { actions: { delete: {} } } } },
+      integration_lifecycle_mappings: [],
     });
 
     IlmPolicyEditorPanel.openExisting(extensionUri, () => undefined, filePath);
@@ -80,6 +124,7 @@ describe('IlmPolicyEditorPanel', () => {
     const filePath = await saveIlmPolicy(undefined, {
       name: 'logs-default-policy',
       policy: { phases: { delete: { actions: { delete: {} } } } },
+      integration_lifecycle_mappings: [],
     });
 
     IlmPolicyEditorPanel.openExisting(extensionUri, () => undefined, filePath);
@@ -250,6 +295,7 @@ describe('IlmPolicyEditorPanel', () => {
     await saveIlmPolicy(undefined, {
       name: 'taken-policy',
       policy: { phases: { delete: { actions: { delete: {} } } } },
+      integration_lifecycle_mappings: [],
     });
     IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
 
@@ -267,6 +313,146 @@ describe('IlmPolicyEditorPanel', () => {
     expect(message).toEqual({
       type: 'error',
       message: 'An Index Lifecycle Policy named "taken-policy" already exists.',
+    });
+  });
+
+  describe('Integration Lifecycle Mappings', () => {
+    it('persists a valid mapping array with trimmed values', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: [
+          {
+            data_stream_type: 'logs',
+            dataset_name: '  map_python  ',
+            integration_name: '  filestream  ',
+            namespace: '  cmt  ',
+          },
+        ],
+      });
+
+      expect(message.type).toBe('saved');
+      const data = message.payload as IlmPolicyDefinition;
+      expect(data.integration_lifecycle_mappings).toEqual([
+        { data_stream_type: 'logs', dataset_name: 'map_python', integration_name: 'filestream', namespace: 'cmt' },
+      ]);
+    });
+
+    it('preserves multiple mappings in order', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const mappings = [
+        { data_stream_type: 'logs', dataset_name: 'map_python', integration_name: 'filestream', namespace: 'cmt' },
+        { data_stream_type: 'metrics', dataset_name: 'map_system', integration_name: 'system', namespace: 'default' },
+      ];
+
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings,
+      });
+
+      expect((message.payload as IlmPolicyDefinition).integration_lifecycle_mappings).toEqual(mappings);
+    });
+
+    it('defaults an entirely missing mappings field to an empty array', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({ name: 'logs-default-policy', phases: enabledHotOnlyPhases, meta: '' });
+
+      expect((message.payload as IlmPolicyDefinition).integration_lifecycle_mappings).toEqual([]);
+    });
+
+    it('ignores a non-array mappings value, treating it as no mappings', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: 'not-an-array',
+      });
+
+      expect((message.payload as IlmPolicyDefinition).integration_lifecycle_mappings).toEqual([]);
+    });
+
+    it('rejects a null mapping entry (falls back to an empty row, which then fails validation)', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: [null],
+      });
+
+      expect(message).toEqual({
+        type: 'error',
+        message: 'Integration Lifecycle Mapping 1: Data Stream Type must be "logs" or "metrics".',
+      });
+    });
+
+    it('treats entirely missing text fields as blank (distinct from empty strings)', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        // dataset_name/integration_name/namespace omitted entirely, not just blank
+        mappings: [{ data_stream_type: 'logs' }],
+      });
+
+      expect(message).toEqual({
+        type: 'error',
+        message: 'Integration Lifecycle Mapping 1: Dataset Name, Integration Name and Namespace are all required.',
+      });
+    });
+
+    it('rejects a mapping with an invalid data_stream_type', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: [{ data_stream_type: 'traces', dataset_name: 'x', integration_name: 'y', namespace: 'z' }],
+      });
+
+      expect(message).toEqual({
+        type: 'error',
+        message: 'Integration Lifecycle Mapping 1: Data Stream Type must be "logs" or "metrics".',
+      });
+    });
+
+    it('rejects a mapping missing a required text field', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: [{ data_stream_type: 'logs', dataset_name: '', integration_name: 'filestream', namespace: 'cmt' }],
+      });
+
+      expect(message).toEqual({
+        type: 'error',
+        message: 'Integration Lifecycle Mapping 1: Dataset Name, Integration Name and Namespace are all required.',
+      });
+    });
+
+    it('identifies the correct 1-based row index when a later mapping is invalid', async () => {
+      IlmPolicyEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-default-policy',
+        phases: enabledHotOnlyPhases,
+        meta: '',
+        mappings: [
+          { data_stream_type: 'logs', dataset_name: 'map_python', integration_name: 'filestream', namespace: 'cmt' },
+          { data_stream_type: 'logs', dataset_name: '', integration_name: 'filestream', namespace: 'cmt' },
+        ],
+      });
+
+      expect(message).toEqual({
+        type: 'error',
+        message: 'Integration Lifecycle Mapping 2: Dataset Name, Integration Name and Namespace are all required.',
+      });
     });
   });
 });

@@ -236,6 +236,7 @@ describe('ElasticTreeProvider', () => {
             delete: { min_age: '90d', actions: { delete: {} } },
           },
         },
+        integration_lifecycle_mappings: [],
       });
 
       const children = await provider.getChildren();
