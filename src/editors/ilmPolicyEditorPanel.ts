@@ -1,15 +1,27 @@
 import * as vscode from 'vscode';
 import { readJsonFile, validateArtifactName } from '../fileSystem';
+import {
+  buildDefaultPhasesFormValue,
+  buildPhasesJson,
+  hasEnabledPhase,
+  ILM_PHASES,
+  IlmPhaseDef,
+  IlmPhasesFormValue,
+  parsePhasesFromRaw,
+} from '../ilm/ilmPhaseTemplate';
 import { IlmPolicyDefinition } from '../models';
 import { saveIlmPolicy } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
 interface IlmPolicyPayload {
   isNew: boolean;
-  item: IlmPolicyDefinition;
+  item: {
+    name: string;
+    phases: IlmPhasesFormValue;
+    meta: string;
+  };
+  template: IlmPhaseDef[];
 }
-
-const VALID_PHASES = ['hot', 'warm', 'cold', 'frozen', 'delete'];
 
 function parseJsonObject(raw: string, fieldLabel: string): Record<string, unknown> {
   let parsed: unknown;
@@ -22,6 +34,16 @@ function parseJsonObject(raw: string, fieldLabel: string): Record<string, unknow
     throw new Error(`${fieldLabel} must be a JSON object.`);
   }
   return parsed as Record<string, unknown>;
+}
+
+function starterPhasesFormValue(): IlmPhasesFormValue {
+  const phases = buildDefaultPhasesFormValue();
+  phases.hot.enabled = true;
+  phases.hot.actions.rollover.enabled = true;
+  phases.hot.actions.set_priority.enabled = true;
+  phases.delete.enabled = true;
+  phases.delete.actions.delete.enabled = true;
+  return phases;
 }
 
 export class IlmPolicyEditorPanel extends ArtifactPanelBase {
@@ -53,7 +75,7 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
   protected getFormBodyHtml(): string {
     return /* html */ `
     <h1 id="title">Index Lifecycle Policy</h1>
-    <p class="subtitle">Defines an Elasticsearch Index Lifecycle Management policy. Phases/actions follow the <a href="https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ilm-put-lifecycle">ILM Put Lifecycle API</a> body.</p>
+    <p class="subtitle">Defines an Elasticsearch Index Lifecycle Management policy. Enable each phase you need and configure its actions.</p>
     <form id="form">
       <div class="field" id="field-name">
         <label for="name">Name</label>
@@ -61,12 +83,7 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
         <span class="hint">Used as this policy's file name and ILM policy name.</span>
         <span class="error">Enter a name that is valid as a file name.</span>
       </div>
-      <div class="field" id="field-phases">
-        <label for="phases">Phases</label>
-        <textarea id="phases" rows="18" spellcheck="false"></textarea>
-        <span class="hint">JSON object keyed by phase (hot, warm, cold, frozen, delete), matching the "policy.phases" body of the ILM Put Lifecycle API.</span>
-        <span class="error">Enter a valid JSON object with at least one phase (hot, warm, cold, frozen, delete).</span>
-      </div>
+      <div id="phases-container"></div>
       <div class="field" id="field-meta">
         <label for="meta">Metadata (optional)</label>
         <textarea id="meta" rows="6" spellcheck="false"></textarea>
@@ -83,38 +100,36 @@ export class IlmPolicyEditorPanel extends ArtifactPanelBase {
   protected async loadInitialPayload(): Promise<IlmPolicyPayload> {
     if (this.filePath) {
       const item = await readJsonFile<IlmPolicyDefinition>(this.filePath);
-      return { isNew: false, item };
+      return {
+        isNew: false,
+        item: {
+          name: item.name,
+          phases: parsePhasesFromRaw(item.policy?.phases),
+          meta: item.policy?._meta ? JSON.stringify(item.policy._meta, null, 2) : '',
+        },
+        template: ILM_PHASES,
+      };
     }
     return {
       isNew: true,
-      item: {
-        name: '',
-        policy: {
-          phases: {
-            hot: {
-              min_age: '0ms',
-              actions: { rollover: { max_primary_shard_size: '50gb', max_age: '30d' } },
-            },
-            delete: { min_age: '90d', actions: { delete: {} } },
-          },
-        },
-      },
+      item: { name: '', phases: starterPhasesFormValue(), meta: '' },
+      template: ILM_PHASES,
     };
   }
 
   protected async handleSave(payload: unknown): Promise<{ filePath: string; data: unknown }> {
-    const data = payload as { name: string; phases: string; meta: string };
+    const data = payload as { name: string; phases: IlmPhasesFormValue; meta: string };
     const name = (data.name ?? '').trim();
     const nameError = validateArtifactName(name);
     if (nameError) {
       throw new Error(nameError);
     }
 
-    const phases = parseJsonObject(data.phases ?? '', 'Phases');
-    const phaseKeys = Object.keys(phases);
-    if (phaseKeys.length === 0 || !phaseKeys.every((key) => VALID_PHASES.includes(key))) {
-      throw new Error(`Phases must only contain: ${VALID_PHASES.join(', ')}.`);
+    const phasesForm = data.phases ?? buildDefaultPhasesFormValue();
+    if (!hasEnabledPhase(phasesForm)) {
+      throw new Error('Enable at least one phase (hot, warm, cold, frozen, delete).');
     }
+    const phases = buildPhasesJson(phasesForm);
 
     const metaRaw = (data.meta ?? '').trim();
     const meta = metaRaw ? parseJsonObject(metaRaw, 'Metadata') : undefined;
