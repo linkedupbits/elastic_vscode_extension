@@ -253,6 +253,19 @@ details[open] > .integration-summary::before {
 
 #add-mapping,
 #add-processor,
-#add-on-failure-processor {
+#add-on-failure-processor,
+#add-mapping-field,
+#add-alias {
   margin-top: 10px;
+}
+
+/* For inputs that live directly in a <summary> (e.g. a mapping field's/alias' Name), outside
+   the usual .field wrapper, so they can still be flagged invalid on save. */
+.invalid-input {
+  border-color: var(--vscode-errorForeground);
+}
+
+/* Hides a section's structured input body while its "Include" checkbox is unchecked. */
+.input-body.section-disabled {
+  display: none;
 }

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { IndexTemplateEditorPanel } from '../../../src/editors/indexTemplateEditorPanel';
+import { CUSTOM_MAPPING_TYPE_ID, MappingFieldFormValue } from '../../../src/indexTemplates/mappingsTemplate';
 import { IndexTemplateDefinition } from '../../../src/models';
 import { saveIndexTemplate } from '../../../src/repositories';
 import { makeTempDir, removeTempDir } from '../../helpers/tempDir';
@@ -9,6 +10,18 @@ import { vscodeMock } from '../../helpers/vscodeMock';
 import { lastPanel, sendReady, sendSave } from '../../helpers/webviewPanel';
 
 const extensionUri = vscode.Uri.file('/ext');
+
+function blankSettings() {
+  return { fields: {}, advanced: '' };
+}
+
+function blankMappings() {
+  return { dynamic: '', disableSource: false, fields: [] as MappingFieldFormValue[] };
+}
+
+function mappingField(overrides: Partial<MappingFieldFormValue> = {}): MappingFieldFormValue {
+  return { name: '', type: 'text', isCustom: false, customType: '', customConfig: '{}', options: {}, ...overrides };
+}
 
 describe('IndexTemplateEditorPanel', () => {
   let workspaceRoot: string;
@@ -39,32 +52,41 @@ describe('IndexTemplateEditorPanel', () => {
         dataStreamEnabled: boolean;
         dataStreamHidden: boolean;
         dataStreamAllowCustomRouting: boolean;
-        settings: string;
-        mappings: string;
-        aliases: string;
+        settingsEnabled: boolean;
+        settings: { fields: Record<string, string>; advanced: string };
+        mappingsEnabled: boolean;
+        mappings: { dynamic: string; disableSource: boolean; fields: unknown[] };
+        aliasesEnabled: boolean;
+        aliases: unknown[];
         meta: string;
         deprecated: boolean;
       };
+      settingsFields: { key: string }[];
+      mappingFieldTypes: { id: string }[];
     };
 
     expect(payload.isNew).toBe(true);
-    expect(payload.item).toEqual({
-      name: '',
-      indexPatterns: [],
-      composedOf: [],
-      priority: '',
-      version: '',
-      allowAutoCreate: '',
-      ignoreMissingComponentTemplates: [],
-      dataStreamEnabled: false,
-      dataStreamHidden: false,
-      dataStreamAllowCustomRouting: false,
-      settings: '',
-      mappings: '',
-      aliases: '',
-      meta: '',
-      deprecated: false,
-    });
+    expect(payload.item.name).toBe('');
+    expect(payload.item.indexPatterns).toEqual([]);
+    expect(payload.item.composedOf).toEqual([]);
+    expect(payload.item.priority).toBe('');
+    expect(payload.item.version).toBe('');
+    expect(payload.item.allowAutoCreate).toBe('');
+    expect(payload.item.ignoreMissingComponentTemplates).toEqual([]);
+    expect(payload.item.dataStreamEnabled).toBe(false);
+    expect(payload.item.dataStreamHidden).toBe(false);
+    expect(payload.item.dataStreamAllowCustomRouting).toBe(false);
+    expect(payload.item.settingsEnabled).toBe(false);
+    expect(payload.item.settings.advanced).toBe('');
+    expect(Object.values(payload.item.settings.fields).every((v) => v === '')).toBe(true);
+    expect(payload.item.mappingsEnabled).toBe(false);
+    expect(payload.item.mappings).toEqual({ dynamic: '', disableSource: false, fields: [] });
+    expect(payload.item.aliasesEnabled).toBe(false);
+    expect(payload.item.aliases).toEqual([]);
+    expect(payload.item.meta).toBe('');
+    expect(payload.item.deprecated).toBe(false);
+    expect(payload.settingsFields.length).toBeGreaterThan(0);
+    expect(payload.mappingFieldTypes.length).toBeGreaterThan(0);
   });
 
   it('an existing panel parses a minimal saved template from disk', async () => {
@@ -86,9 +108,12 @@ describe('IndexTemplateEditorPanel', () => {
         allowAutoCreate: string;
         ignoreMissingComponentTemplates: string[];
         dataStreamEnabled: boolean;
-        settings: string;
-        mappings: string;
-        aliases: string;
+        settingsEnabled: boolean;
+        settings: { fields: Record<string, string>; advanced: string };
+        mappingsEnabled: boolean;
+        mappings: { dynamic: string; disableSource: boolean; fields: unknown[] };
+        aliasesEnabled: boolean;
+        aliases: unknown[];
         meta: string;
       };
     };
@@ -102,9 +127,12 @@ describe('IndexTemplateEditorPanel', () => {
     expect(payload.item.allowAutoCreate).toBe('');
     expect(payload.item.ignoreMissingComponentTemplates).toEqual([]);
     expect(payload.item.dataStreamEnabled).toBe(false);
-    expect(payload.item.settings).toBe('');
-    expect(payload.item.mappings).toBe('');
-    expect(payload.item.aliases).toBe('');
+    expect(payload.item.settingsEnabled).toBe(false);
+    expect(payload.item.settings.advanced).toBe('');
+    expect(payload.item.mappingsEnabled).toBe(false);
+    expect(payload.item.mappings).toEqual({ dynamic: '', disableSource: false, fields: [] });
+    expect(payload.item.aliasesEnabled).toBe(false);
+    expect(payload.item.aliases).toEqual([]);
     expect(payload.item.meta).toBe('');
   });
 
@@ -119,9 +147,9 @@ describe('IndexTemplateEditorPanel', () => {
       ignore_missing_component_templates: ['maybe-missing'],
       data_stream: { hidden: true, allow_custom_routing: true },
       template: {
-        settings: { number_of_shards: 1 },
-        mappings: { properties: { message: { type: 'text' } } },
-        aliases: { 'logs-myapp-alias': {} },
+        settings: { number_of_shards: 1, 'sort.field': 'timestamp' },
+        mappings: { dynamic: 'strict', properties: { message: { type: 'text' } } },
+        aliases: { 'logs-myapp-alias': { is_write_index: true } },
       },
       _meta: { managed_by: 'cmt' },
       deprecated: true,
@@ -139,9 +167,12 @@ describe('IndexTemplateEditorPanel', () => {
         dataStreamEnabled: boolean;
         dataStreamHidden: boolean;
         dataStreamAllowCustomRouting: boolean;
-        settings: string;
-        mappings: string;
-        aliases: string;
+        settingsEnabled: boolean;
+        settings: { fields: Record<string, string>; advanced: string };
+        mappingsEnabled: boolean;
+        mappings: { dynamic: string; disableSource: boolean; fields: { name: string; type: string }[] };
+        aliasesEnabled: boolean;
+        aliases: { name: string; isWriteIndex: boolean }[];
         meta: string;
         deprecated: boolean;
       };
@@ -155,9 +186,14 @@ describe('IndexTemplateEditorPanel', () => {
     expect(payload.item.dataStreamEnabled).toBe(true);
     expect(payload.item.dataStreamHidden).toBe(true);
     expect(payload.item.dataStreamAllowCustomRouting).toBe(true);
-    expect(JSON.parse(payload.item.settings)).toEqual({ number_of_shards: 1 });
-    expect(JSON.parse(payload.item.mappings)).toEqual({ properties: { message: { type: 'text' } } });
-    expect(JSON.parse(payload.item.aliases)).toEqual({ 'logs-myapp-alias': {} });
+    expect(payload.item.settingsEnabled).toBe(true);
+    expect(payload.item.settings.fields.number_of_shards).toBe('1');
+    expect(JSON.parse(payload.item.settings.advanced)).toEqual({ 'sort.field': 'timestamp' });
+    expect(payload.item.mappingsEnabled).toBe(true);
+    expect(payload.item.mappings.dynamic).toBe('strict');
+    expect(payload.item.mappings.fields).toEqual([{ name: 'message', type: 'text', isCustom: false, customType: '', customConfig: '{}', options: { analyzer: '', add_keyword_subfield: false } }]);
+    expect(payload.item.aliasesEnabled).toBe(true);
+    expect(payload.item.aliases).toEqual([{ name: 'logs-myapp-alias', isWriteIndex: true, isHidden: false, routing: '', filter: '' }]);
     expect(JSON.parse(payload.item.meta)).toEqual({ managed_by: 'cmt' });
     expect(payload.item.deprecated).toBe(true);
   });
@@ -216,9 +252,9 @@ describe('IndexTemplateEditorPanel', () => {
       dataStreamEnabled: false,
       dataStreamHidden: false,
       dataStreamAllowCustomRouting: false,
-      settings: '',
-      mappings: '',
-      aliases: '',
+      settings: blankSettings(),
+      mappings: blankMappings(),
+      aliases: [],
       meta: '',
       deprecated: false,
     });
@@ -242,9 +278,16 @@ describe('IndexTemplateEditorPanel', () => {
       dataStreamEnabled: true,
       dataStreamHidden: true,
       dataStreamAllowCustomRouting: true,
-      settings: '{"number_of_shards": 1}',
-      mappings: '{"properties": {"message": {"type": "text"}}}',
-      aliases: '{"logs-myapp-alias": {}}',
+      settingsEnabled: true,
+      settings: { fields: { number_of_shards: '1' }, advanced: '' },
+      mappingsEnabled: true,
+      mappings: {
+        dynamic: 'strict',
+        disableSource: true,
+        fields: [mappingField({ name: 'message', type: 'text' })],
+      },
+      aliasesEnabled: true,
+      aliases: [{ name: 'logs-myapp-alias', isWriteIndex: true, isHidden: false, routing: '', filter: '' }],
       meta: '{"managed_by": "cmt"}',
       deprecated: true,
     });
@@ -262,8 +305,8 @@ describe('IndexTemplateEditorPanel', () => {
       data_stream: { hidden: true, allow_custom_routing: true },
       template: {
         settings: { number_of_shards: 1 },
-        mappings: { properties: { message: { type: 'text' } } },
-        aliases: { 'logs-myapp-alias': {} },
+        mappings: { dynamic: 'strict', _source: { enabled: false }, properties: { message: { type: 'text' } } },
+        aliases: { 'logs-myapp-alias': { is_write_index: true } },
       },
       _meta: { managed_by: 'cmt' },
       deprecated: true,
@@ -276,7 +319,8 @@ describe('IndexTemplateEditorPanel', () => {
     const message = await sendSave({
       name: 'logs-myapp',
       indexPatterns: ['logs-myapp-*'],
-      mappings: '{"properties": {"message": {"type": "text"}}}',
+      mappingsEnabled: true,
+      mappings: { dynamic: '', disableSource: false, fields: [mappingField({ name: 'message', type: 'text' })] },
     });
 
     expect(message.type).toBe('saved');
@@ -291,14 +335,125 @@ describe('IndexTemplateEditorPanel', () => {
     const message = await sendSave({
       name: 'logs-myapp',
       indexPatterns: ['logs-myapp-*'],
-      settings: '{"number_of_shards": 1}',
-      aliases: '{"logs-myapp-alias": {}}',
+      settingsEnabled: true,
+      settings: { fields: { number_of_shards: '1' }, advanced: '' },
+      aliasesEnabled: true,
+      aliases: [{ name: 'logs-myapp-alias', isWriteIndex: false, isHidden: false, routing: '', filter: '' }],
     });
 
     expect(message.type).toBe('saved');
     expect((message.payload as IndexTemplateDefinition).template).toEqual({
       settings: { number_of_shards: 1 },
       aliases: { 'logs-myapp-alias': {} },
+    });
+  });
+
+  it('treats an entirely missing settings/mappings/aliases as unset', async () => {
+    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+    const message = await sendSave({ name: 'logs-myapp', indexPatterns: ['logs-myapp-*'] });
+
+    expect(message.type).toBe('saved');
+    expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+  });
+
+  describe('Include Settings/Mappings/Aliases toggles', () => {
+    it('excludes settings from the saved template when settingsEnabled is false, even if fields are populated', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        settingsEnabled: false,
+        settings: { fields: { number_of_shards: '3' }, advanced: '' },
+      });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+    });
+
+    it('excludes settings without validating them when settingsEnabled is false, even if malformed', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        settingsEnabled: false,
+        settings: { fields: { number_of_shards: 'not-a-number' }, advanced: '{ not valid json' },
+      });
+
+      expect(message.type).toBe('saved');
+    });
+
+    it('excludes mappings from the saved template when mappingsEnabled is false, even if fields are populated', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: false,
+        mappings: { dynamic: 'strict', disableSource: true, fields: [mappingField({ name: 'message', type: 'text' })] },
+      });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+    });
+
+    it('excludes mappings without validating them when mappingsEnabled is false, even if invalid', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: false,
+        mappings: { dynamic: '', disableSource: false, fields: [mappingField({ name: '' })] },
+      });
+
+      expect(message.type).toBe('saved');
+    });
+
+    it('excludes aliases from the saved template when aliasesEnabled is false, even if rows are populated', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: false,
+        aliases: [{ name: 'logs-myapp-alias', isWriteIndex: true, isHidden: false, routing: '', filter: '' }],
+      });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+    });
+
+    it('excludes aliases without validating them when aliasesEnabled is false, even if invalid', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: false,
+        aliases: [{ name: '', isWriteIndex: false, isHidden: false, routing: '', filter: '' }],
+      });
+
+      expect(message.type).toBe('saved');
+    });
+
+    it('treats settingsEnabled: true with an entirely missing settings key as blank settings', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({ name: 'logs-myapp', indexPatterns: ['logs-myapp-*'], settingsEnabled: true });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+    });
+
+    it('treats mappingsEnabled: true with an entirely missing mappings key as blank mappings', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({ name: 'logs-myapp', indexPatterns: ['logs-myapp-*'], mappingsEnabled: true });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
+    });
+
+    it('treats aliasesEnabled: true with an entirely missing aliases key as no aliases', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({ name: 'logs-myapp', indexPatterns: ['logs-myapp-*'], aliasesEnabled: true });
+
+      expect(message.type).toBe('saved');
+      expect((message.payload as IndexTemplateDefinition).template).toBeUndefined();
     });
   });
 
@@ -372,64 +527,206 @@ describe('IndexTemplateEditorPanel', () => {
     expect(message).toEqual({ type: 'error', message: 'Version must be a number.' });
   });
 
-  it('rejects malformed JSON in the settings field', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      settings: '{ not valid json',
+  describe('Settings', () => {
+    it('rejects a non-numeric curated numeric field', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        settingsEnabled: true,
+        settings: { fields: { number_of_shards: 'not-a-number' }, advanced: '' },
+      });
+      expect(message).toEqual({ type: 'error', message: '"Number of Shards" must be a number.' });
     });
-    expect(message).toEqual({ type: 'error', message: 'Settings must be valid JSON.' });
+
+    it('rejects malformed JSON in Advanced Settings', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        settingsEnabled: true,
+        settings: { fields: {}, advanced: '{ not valid json' },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Advanced Settings must be valid JSON.' });
+    });
+
+    it('rejects Advanced Settings that parse but are not a JSON object', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        settingsEnabled: true,
+        settings: { fields: {}, advanced: '[1, 2, 3]' },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Advanced Settings must be a JSON object.' });
+    });
   });
 
-  it('rejects settings that parse but are not a JSON object', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      settings: '[1, 2, 3]',
+  describe('Mappings', () => {
+    it('saves a curated field with its structured options', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: {
+          dynamic: '',
+          disableSource: false,
+          fields: [mappingField({ name: 'status', type: 'keyword', options: { ignore_above: 256 } })],
+        },
+      });
+      expect((message.payload as IndexTemplateDefinition).template?.mappings).toEqual({
+        properties: { status: { type: 'keyword', ignore_above: 256 } },
+      });
     });
-    expect(message).toEqual({ type: 'error', message: 'Settings must be a JSON object.' });
+
+    it('saves a custom/uncurated field type verbatim', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: {
+          dynamic: '',
+          disableSource: false,
+          fields: [
+            mappingField({
+              name: 'embedding',
+              type: CUSTOM_MAPPING_TYPE_ID,
+              isCustom: true,
+              customType: 'dense_vector',
+              customConfig: '{"dims": 384}',
+            }),
+          ],
+        },
+      });
+      expect((message.payload as IndexTemplateDefinition).template?.mappings).toEqual({
+        properties: { embedding: { type: 'dense_vector', dims: 384 } },
+      });
+    });
+
+    it('rejects a field with a blank name', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: { dynamic: '', disableSource: false, fields: [mappingField({ name: '' })] },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Field 1: Field Name is required.' });
+    });
+
+    it('rejects two fields sharing the same name', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: {
+          dynamic: '',
+          disableSource: false,
+          fields: [mappingField({ name: 'status' }), mappingField({ name: 'status' })],
+        },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Field 2: A field named "status" is already defined.' });
+    });
+
+    it('rejects a custom field with a blank type', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: {
+          dynamic: '',
+          disableSource: false,
+          fields: [mappingField({ name: 'embedding', type: CUSTOM_MAPPING_TYPE_ID, isCustom: true, customType: '' })],
+        },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Field 1 ("embedding"): Field Type is required.' });
+    });
+
+    it('rejects a custom field with invalid configuration JSON', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        mappingsEnabled: true,
+        mappings: {
+          dynamic: '',
+          disableSource: false,
+          fields: [
+            mappingField({
+              name: 'embedding',
+              type: CUSTOM_MAPPING_TYPE_ID,
+              isCustom: true,
+              customType: 'dense_vector',
+              customConfig: '{ not valid json',
+            }),
+          ],
+        },
+      });
+      expect(message).toEqual({ type: 'error', message: 'Field 1 ("embedding"): Configuration must be valid JSON.' });
+    });
   });
 
-  it('rejects malformed JSON in the mappings field', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      mappings: '{ not valid json',
+  describe('Aliases', () => {
+    it('saves an alias with structured fields plus a filter', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: true,
+        aliases: [
+          {
+            name: 'logs-myapp-alias',
+            isWriteIndex: true,
+            isHidden: true,
+            routing: 'shard1',
+            filter: '{"term": {"tenant": "acme"}}',
+          },
+        ],
+      });
+      expect((message.payload as IndexTemplateDefinition).template?.aliases).toEqual({
+        'logs-myapp-alias': { is_write_index: true, is_hidden: true, routing: 'shard1', filter: { term: { tenant: 'acme' } } },
+      });
     });
-    expect(message).toEqual({ type: 'error', message: 'Mappings must be valid JSON.' });
-  });
 
-  it('rejects mappings that parse but are not a JSON object', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      mappings: 'null',
+    it('rejects an alias with a blank name', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: true,
+        aliases: [{ name: '', isWriteIndex: false, isHidden: false, routing: '', filter: '' }],
+      });
+      expect(message).toEqual({ type: 'error', message: 'Alias 1: Alias Name is required.' });
     });
-    expect(message).toEqual({ type: 'error', message: 'Mappings must be a JSON object.' });
-  });
 
-  it('rejects malformed JSON in the aliases field', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      aliases: '{ not valid json',
+    it('rejects two aliases sharing the same name', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: true,
+        aliases: [
+          { name: 'logs-myapp-alias', isWriteIndex: false, isHidden: false, routing: '', filter: '' },
+          { name: 'logs-myapp-alias', isWriteIndex: false, isHidden: false, routing: '', filter: '' },
+        ],
+      });
+      expect(message).toEqual({ type: 'error', message: 'Alias 2: An alias named "logs-myapp-alias" is already defined.' });
     });
-    expect(message).toEqual({ type: 'error', message: 'Aliases must be valid JSON.' });
-  });
 
-  it('rejects aliases that parse but are not a JSON object', async () => {
-    IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
-    const message = await sendSave({
-      name: 'logs-myapp',
-      indexPatterns: ['logs-myapp-*'],
-      aliases: '"a string"',
+    it('rejects an alias with an invalid filter', async () => {
+      IndexTemplateEditorPanel.openNew(extensionUri, () => undefined);
+      const message = await sendSave({
+        name: 'logs-myapp',
+        indexPatterns: ['logs-myapp-*'],
+        aliasesEnabled: true,
+        aliases: [{ name: 'logs-myapp-alias', isWriteIndex: false, isHidden: false, routing: '', filter: '{ not valid json' }],
+      });
+      expect(message).toEqual({ type: 'error', message: 'Alias 1 ("logs-myapp-alias"): Filter must be valid JSON.' });
     });
-    expect(message).toEqual({ type: 'error', message: 'Aliases must be a JSON object.' });
   });
 
   it('rejects malformed JSON in the metadata field', async () => {

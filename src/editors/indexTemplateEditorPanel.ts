@@ -1,5 +1,24 @@
 import * as vscode from 'vscode';
 import { readJsonFile, validateArtifactName } from '../fileSystem';
+import {
+  buildAliasesJson,
+  IndexTemplateAliasFormValue,
+  parseAliasesFromRaw,
+} from '../indexTemplates/aliasesTemplate';
+import {
+  buildMappingsJson,
+  IndexTemplateMappingsFormValue,
+  MAPPING_FIELD_TYPES,
+  MappingFieldTypeDef,
+  parseMappingsFromRaw,
+} from '../indexTemplates/mappingsTemplate';
+import {
+  buildSettingsJson,
+  INDEX_TEMPLATE_SETTINGS_FIELDS,
+  IndexTemplateSettingsFormValue,
+  parseSettingsFromRaw,
+  SettingsFieldDef,
+} from '../indexTemplates/settingsTemplate';
 import { IndexTemplateDefinition } from '../models';
 import { saveIndexTemplate } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
@@ -15,9 +34,12 @@ interface IndexTemplateFormItem {
   dataStreamEnabled: boolean;
   dataStreamHidden: boolean;
   dataStreamAllowCustomRouting: boolean;
-  settings: string;
-  mappings: string;
-  aliases: string;
+  settingsEnabled: boolean;
+  settings: IndexTemplateSettingsFormValue;
+  mappingsEnabled: boolean;
+  mappings: IndexTemplateMappingsFormValue;
+  aliasesEnabled: boolean;
+  aliases: IndexTemplateAliasFormValue[];
   meta: string;
   deprecated: boolean;
 }
@@ -25,6 +47,8 @@ interface IndexTemplateFormItem {
 interface IndexTemplatePayload {
   isNew: boolean;
   item: IndexTemplateFormItem;
+  settingsFields: SettingsFieldDef[];
+  mappingFieldTypes: MappingFieldTypeDef[];
 }
 
 function parseOptionalJsonObject(raw: string, fieldLabel: string): Record<string, unknown> | undefined {
@@ -145,25 +169,64 @@ export class IndexTemplateEditorPanel extends ArtifactPanelBase {
           </div>
         </div>
       </details>
-      <div class="field" id="field-settings">
-        <label for="settings">Settings (optional)</label>
-        <textarea id="settings" rows="6" spellcheck="false"></textarea>
-        <span class="hint">Optional JSON object saved as "template.settings", e.g. number_of_shards/number_of_replicas.</span>
-        <span class="error">Settings must be a valid JSON object.</span>
-      </div>
-      <div class="field" id="field-mappings">
-        <label for="mappings">Mappings (optional)</label>
-        <textarea id="mappings" rows="6" spellcheck="false"></textarea>
-        <span class="hint">Optional JSON object saved as "template.mappings".</span>
-        <span class="error">Mappings must be a valid JSON object.</span>
-      </div>
-      <div class="field" id="field-aliases">
-        <label for="aliases">Aliases (optional)</label>
-        <textarea id="aliases" rows="4" spellcheck="false"></textarea>
-        <span class="hint">Optional JSON object saved as "template.aliases".</span>
-        <span class="error">Aliases must be a valid JSON object.</span>
-      </div>
-      <div class="field" id="field-meta">
+
+      <details class="integration-input" id="settings-section" style="margin-top:20px">
+        <summary class="integration-summary">
+          <input type="checkbox" id="settingsEnabled" />
+          <strong>Settings</strong>
+        </summary>
+        <div class="input-body" id="settings-body">
+          <span class="hint">Common index settings. Anything not listed below can be added as Advanced Settings JSON.</span>
+          <div id="settings-fields-container"></div>
+          <div class="field" id="field-settingsAdvanced">
+            <label for="settingsAdvanced">Advanced Settings (optional, JSON)</label>
+            <textarea id="settingsAdvanced" rows="4" spellcheck="false"></textarea>
+            <span class="hint">Any additional settings not covered above, merged into "template.settings".</span>
+            <span class="error">Advanced Settings must be a valid JSON object.</span>
+          </div>
+        </div>
+      </details>
+
+      <details class="integration-input" id="mappings-section" style="margin-top:12px">
+        <summary class="integration-summary">
+          <input type="checkbox" id="mappingsEnabled" />
+          <strong>Mappings</strong>
+        </summary>
+        <div class="input-body" id="mappings-body">
+          <span class="hint">Defines the fields for indices created from this template.</span>
+          <div class="field">
+            <label for="mappingsDynamic">Dynamic</label>
+            <select id="mappingsDynamic">
+              <option value="">(default)</option>
+              <option value="true">true</option>
+              <option value="false">false</option>
+              <option value="strict">strict</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="checkbox-row">
+              <input type="checkbox" id="mappingsDisableSource" />
+              <label for="mappingsDisableSource" style="margin:0">Disable _source</label>
+            </div>
+          </div>
+          <div id="mapping-fields-container"></div>
+          <button type="button" class="secondary" id="add-mapping-field">Add Field</button>
+        </div>
+      </details>
+
+      <details class="integration-input" id="aliases-section" style="margin-top:12px">
+        <summary class="integration-summary">
+          <input type="checkbox" id="aliasesEnabled" />
+          <strong>Aliases</strong>
+        </summary>
+        <div class="input-body" id="aliases-body">
+          <span class="hint">Aliases automatically applied to indices created from this template.</span>
+          <div id="aliases-container"></div>
+          <button type="button" class="secondary" id="add-alias">Add Alias</button>
+        </div>
+      </details>
+
+      <div class="field" id="field-meta" style="margin-top:20px">
         <label for="meta">Metadata (optional)</label>
         <textarea id="meta" rows="4" spellcheck="false"></textarea>
         <span class="hint">Optional JSON object saved as "_meta".</span>
@@ -198,12 +261,17 @@ export class IndexTemplateEditorPanel extends ArtifactPanelBase {
           dataStreamEnabled: item.data_stream !== undefined,
           dataStreamHidden: Boolean(item.data_stream?.hidden),
           dataStreamAllowCustomRouting: Boolean(item.data_stream?.allow_custom_routing),
-          settings: item.template?.settings ? JSON.stringify(item.template.settings, null, 2) : '',
-          mappings: item.template?.mappings ? JSON.stringify(item.template.mappings, null, 2) : '',
-          aliases: item.template?.aliases ? JSON.stringify(item.template.aliases, null, 2) : '',
+          settingsEnabled: item.template?.settings !== undefined,
+          settings: parseSettingsFromRaw(item.template?.settings),
+          mappingsEnabled: item.template?.mappings !== undefined,
+          mappings: parseMappingsFromRaw(item.template?.mappings),
+          aliasesEnabled: item.template?.aliases !== undefined,
+          aliases: parseAliasesFromRaw(item.template?.aliases),
           meta: item._meta ? JSON.stringify(item._meta, null, 2) : '',
           deprecated: Boolean(item.deprecated),
         },
+        settingsFields: INDEX_TEMPLATE_SETTINGS_FIELDS,
+        mappingFieldTypes: MAPPING_FIELD_TYPES,
       };
     }
     return {
@@ -219,12 +287,17 @@ export class IndexTemplateEditorPanel extends ArtifactPanelBase {
         dataStreamEnabled: false,
         dataStreamHidden: false,
         dataStreamAllowCustomRouting: false,
-        settings: '',
-        mappings: '',
-        aliases: '',
+        settingsEnabled: false,
+        settings: parseSettingsFromRaw(undefined),
+        mappingsEnabled: false,
+        mappings: parseMappingsFromRaw(undefined),
+        aliasesEnabled: false,
+        aliases: [],
         meta: '',
         deprecated: false,
       },
+      settingsFields: INDEX_TEMPLATE_SETTINGS_FIELDS,
+      mappingFieldTypes: MAPPING_FIELD_TYPES,
     };
   }
 
@@ -240,9 +313,12 @@ export class IndexTemplateEditorPanel extends ArtifactPanelBase {
       dataStreamEnabled: boolean;
       dataStreamHidden: boolean;
       dataStreamAllowCustomRouting: boolean;
-      settings: string;
-      mappings: string;
-      aliases: string;
+      settingsEnabled: boolean;
+      settings: IndexTemplateSettingsFormValue;
+      mappingsEnabled: boolean;
+      mappings: IndexTemplateMappingsFormValue;
+      aliasesEnabled: boolean;
+      aliases: IndexTemplateAliasFormValue[];
       meta: string;
       deprecated: boolean;
     };
@@ -285,9 +361,15 @@ export class IndexTemplateEditorPanel extends ArtifactPanelBase {
       allowAutoCreate = false;
     }
 
-    const settings = parseOptionalJsonObject(data.settings, 'Settings');
-    const mappings = parseOptionalJsonObject(data.mappings, 'Mappings');
-    const aliases = parseOptionalJsonObject(data.aliases, 'Aliases');
+    const settings = data.settingsEnabled
+      ? buildSettingsJson(data.settings ?? { fields: {}, advanced: '' })
+      : undefined;
+    const mappings = data.mappingsEnabled
+      ? buildMappingsJson(data.mappings ?? { dynamic: '', disableSource: false, fields: [] })
+      : undefined;
+    const aliasRows = data.aliasesEnabled ? data.aliases ?? [] : [];
+    const aliases = aliasRows.length > 0 ? buildAliasesJson(aliasRows) : undefined;
+
     const meta = parseOptionalJsonObject(data.meta, 'Metadata');
 
     const template =
