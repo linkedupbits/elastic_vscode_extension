@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { readJsonFile, validateArtifactName } from '../fileSystem';
 import {
   buildDefaultIntegrationPolicy,
+  computeRequiresRoot,
   findMissingRequiredVars,
   mergeInputsWithTemplate,
   PackageTemplate,
@@ -152,7 +153,7 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
         name: this.template.name,
         title: this.template.title,
         version: this.template.version,
-        requires_root: this.template.requiresRoot,
+        requires_root: computeRequiresRoot(this.template, inputs),
       },
       policy_id: agentPolicy.id,
       policy_ids: [agentPolicy.id],

@@ -189,6 +189,28 @@ details.integration-stream {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  list-style: none;
+}
+
+.integration-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Overriding `display` above drops the browser's native disclosure triangle, so draw our own
+   collapse/expand chevron that's guaranteed to render and rotate with the [open] state. */
+.integration-summary::before {
+  content: '';
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--vscode-icon-foreground, currentColor);
+  transition: transform 0.1s ease;
+}
+
+details[open] > .integration-summary::before {
+  transform: rotate(90deg);
 }
 
 .integration-summary input {

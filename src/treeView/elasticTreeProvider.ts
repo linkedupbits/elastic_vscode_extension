@@ -52,13 +52,13 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
 
       switch (element.contextValue) {
         case 'category-proxies':
-          return this.getProxyItems();
+          return await this.getProxyItems();
         case 'category-downloadsources':
-          return this.getDownloadSourceItems();
+          return await this.getDownloadSourceItems();
         case 'category-agentpolicies':
-          return this.getAgentPolicyItems();
+          return await this.getAgentPolicyItems();
         case 'agentpolicy':
-          return this.getIntegrationPolicyItems(element.filePath as string);
+          return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
           return [];
       }

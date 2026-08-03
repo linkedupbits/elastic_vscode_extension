@@ -14,7 +14,6 @@ export const nginxPackageTemplate: PackageTemplate = {
   name: 'nginx',
   title: 'Nginx',
   version: '3.2.1',
-  requiresRoot: false,
   inputs: [
     {
       id: 'nginx-logfile',

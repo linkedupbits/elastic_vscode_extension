@@ -1,6 +1,6 @@
 import { IntegrationInputValue, IntegrationPolicy, VarValue } from '../models';
 
-export type VarType = 'string' | 'multiline' | 'boolean' | 'number' | 'stringArray';
+export type VarType = 'string' | 'multiline' | 'boolean' | 'number' | 'stringArray' | 'select';
 
 export interface VarFieldDef {
   key: string;
@@ -9,6 +9,8 @@ export interface VarFieldDef {
   default: VarValue;
   /** Mirrors the package manifest's `required: true`; enforced only while the owning input/stream is enabled. */
   required?: boolean;
+  /** Only used when type === 'select'. */
+  options?: { value: string; label: string }[];
 }
 
 export interface StreamDef {
@@ -16,6 +18,8 @@ export interface StreamDef {
   label: string;
   defaultEnabled: boolean;
   vars: VarFieldDef[];
+  /** Mirrors the data stream manifest's `agent.privileges.root: true`. */
+  requiresRoot?: boolean;
 }
 
 export interface InputDef {
@@ -36,7 +40,6 @@ export interface PackageTemplate {
   name: string;
   title: string;
   version: string;
-  requiresRoot: boolean;
   inputs: InputDef[];
 }
 
@@ -148,10 +151,30 @@ export function findMissingRequiredVars(
   return errors;
 }
 
+/**
+ * Whether the policy needs root/admin privileges on the host, computed the way Fleet does:
+ * true only if a currently-enabled stream belongs to a data stream that declares
+ * `agent.privileges.root: true` in its manifest (e.g. System's `auth`/`syslog`/`diskio`).
+ * A disabled root-requiring stream does not make the policy require root.
+ */
+export function computeRequiresRoot(
+  template: PackageTemplate,
+  inputs: Record<string, IntegrationInputValue>
+): boolean {
+  return template.inputs.some((input) => {
+    const inputVal = inputs[input.id];
+    if (!inputVal?.enabled) {
+      return false;
+    }
+    return input.streams.some((stream) => stream.requiresRoot && inputVal.streams?.[stream.id]?.enabled);
+  });
+}
+
 export function buildDefaultIntegrationPolicy(
   template: PackageTemplate,
   agentPolicyId: string
 ): IntegrationPolicy {
+  const inputs = buildDefaultInputs(template);
   return {
     name: '',
     namespace: '',
@@ -160,11 +183,11 @@ export function buildDefaultIntegrationPolicy(
       name: template.name,
       title: template.title,
       version: template.version,
-      requires_root: template.requiresRoot,
+      requires_root: computeRequiresRoot(template, inputs),
     },
     policy_id: agentPolicyId,
     policy_ids: [agentPolicyId],
-    inputs: buildDefaultInputs(template),
+    inputs,
     output_id: null,
     vars: {},
   };

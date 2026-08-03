@@ -26,6 +26,7 @@ export interface LoadedArtifact<T> {
 export class ArtifactConflictError extends Error {}
 
 // ---------- Fleet Proxies ----------
+// Each lives as a *.json file named after its own `name` attribute.
 
 export async function listFleetProxies(): Promise<LoadedArtifact<FleetProxy>[]> {
   const files = await listJsonFiles(getFleetProxiesDir());
@@ -39,13 +40,25 @@ export async function getFleetProxyRefs(): Promise<NamedRef[]> {
   return (await listFleetProxies()).map(({ data }) => ({ id: data.id, name: data.name }));
 }
 
+/**
+ * Creates or updates a Fleet Proxy. If the name changed on an existing proxy, the json
+ * file is renamed to match.
+ */
 export async function saveFleetProxy(
   existingFilePath: string | undefined,
   data: FleetProxy
 ): Promise<string> {
-  const filePath = existingFilePath ?? path.join(getFleetProxiesDir(), `${data.id}.json`);
-  await writeJsonFile(filePath, data);
-  return filePath;
+  const targetFile = path.join(getFleetProxiesDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Fleet Proxy named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
 }
 
 export async function deleteFleetProxy(filePath: string): Promise<void> {
@@ -53,6 +66,7 @@ export async function deleteFleetProxy(filePath: string): Promise<void> {
 }
 
 // ---------- Fleet Download Sources ----------
+// Each lives as a *.json file named after its own `name` attribute.
 
 export async function listFleetDownloadSources(): Promise<LoadedArtifact<FleetDownloadSource>[]> {
   const files = await listJsonFiles(getFleetDownloadSourcesDir());
@@ -69,13 +83,25 @@ export async function getFleetDownloadSourceRefs(): Promise<NamedRef[]> {
   return (await listFleetDownloadSources()).map(({ data }) => ({ id: data.id, name: data.name }));
 }
 
+/**
+ * Creates or updates a Fleet Download Source. If the name changed on an existing download
+ * source, the json file is renamed to match.
+ */
 export async function saveFleetDownloadSource(
   existingFilePath: string | undefined,
   data: FleetDownloadSource
 ): Promise<string> {
-  const filePath = existingFilePath ?? path.join(getFleetDownloadSourcesDir(), `${data.id}.json`);
-  await writeJsonFile(filePath, data);
-  return filePath;
+  const targetFile = path.join(getFleetDownloadSourcesDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Fleet Download Source named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
 }
 
 export async function deleteFleetDownloadSource(filePath: string): Promise<void> {

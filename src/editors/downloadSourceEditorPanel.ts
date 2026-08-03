@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { generateId, readJsonFile } from '../fileSystem';
+import { generateId, readJsonFile, validateArtifactName } from '../fileSystem';
 import { FleetDownloadSource, NamedRef } from '../models';
 import { getFleetProxyRefs, saveFleetDownloadSource } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
@@ -59,7 +59,8 @@ export class DownloadSourceEditorPanel extends ArtifactPanelBase {
       <div class="field" id="field-name">
         <label for="name">Name</label>
         <input type="text" id="name" />
-        <span class="error">Name is required.</span>
+        <span class="hint">Used as this download source's file name.</span>
+        <span class="error">Enter a name that is valid as a file name.</span>
       </div>
       <div class="field" id="field-host">
         <label for="host">Host</label>
@@ -101,8 +102,9 @@ export class DownloadSourceEditorPanel extends ArtifactPanelBase {
   protected async handleSave(payload: unknown): Promise<{ filePath: string; data: unknown }> {
     const data = payload as FleetDownloadSource;
     const name = (data.name ?? '').trim();
-    if (!name) {
-      throw new Error('Name is required.');
+    const nameError = validateArtifactName(name);
+    if (nameError) {
+      throw new Error(nameError);
     }
     if (!isValidUrl(data.host ?? '')) {
       throw new Error('Host is not a valid URL.');

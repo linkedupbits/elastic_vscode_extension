@@ -1,8 +1,12 @@
 .vscode/**
 .vscode-test/**
 src/**
+test/**
+coverage/**
 .gitignore
 tsconfig.json
+tsconfig.jest.json
+jest.config.js
 **/*.map
 **/.git/**
 node_modules/**

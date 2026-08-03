@@ -46,6 +46,12 @@
         return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea>${errorSpan}</div>`;
       case 'stringArray':
         return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea><span class="hint">One value per line.</span>${errorSpan}</div>`;
+      case 'select': {
+        const options = (field.options || [])
+          .map((o) => `<option value="${o.value}">${o.label}</option>`)
+          .join('');
+        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><select id="${id}">${options}</select>${errorSpan}</div>`;
+      }
       case 'string':
       default:
         return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><input type="text" id="${id}" />${errorSpan}</div>`;

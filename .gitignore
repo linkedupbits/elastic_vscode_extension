@@ -2,6 +2,7 @@ out/
 node_modules/
 *.vsix
 .vscode-test/
+coverage/
 
 
 examples/

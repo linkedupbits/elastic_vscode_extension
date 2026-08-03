@@ -65,7 +65,8 @@
     event.preventDefault();
     clearError();
 
-    const nameValid = nameField.value.trim().length > 0;
+    const nameValue = nameField.value.trim();
+    const nameValid = nameValue.length > 0 && !/[\\/:*?"<>|]/.test(nameValue);
     const urlValid = isValidUrl(urlField.value.trim());
     setFieldValid('name', nameValid);
     setFieldValid('url', urlValid);

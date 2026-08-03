@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import { generateId } from '../fileSystem';
+import { generateId, readJsonFile, validateArtifactName } from '../fileSystem';
 import { FleetProxy } from '../models';
-import { readJsonFile } from '../fileSystem';
 import { saveFleetProxy } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
@@ -53,7 +52,8 @@ export class ProxyEditorPanel extends ArtifactPanelBase {
       <div class="field" id="field-name">
         <label for="name">Name</label>
         <input type="text" id="name" />
-        <span class="error">Name is required.</span>
+        <span class="hint">Used as this proxy's file name.</span>
+        <span class="error">Enter a name that is valid as a file name.</span>
       </div>
       <div class="field" id="field-url">
         <label for="url">URL</label>
@@ -107,8 +107,9 @@ export class ProxyEditorPanel extends ArtifactPanelBase {
   protected async handleSave(payload: unknown): Promise<{ filePath: string; data: unknown }> {
     const data = payload as FleetProxy;
     const name = (data.name ?? '').trim();
-    if (!name) {
-      throw new Error('Name is required.');
+    const nameError = validateArtifactName(name);
+    if (nameError) {
+      throw new Error(nameError);
     }
     if (!isValidUrl(data.url ?? '')) {
       throw new Error('URL is not valid.');

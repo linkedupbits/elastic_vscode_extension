@@ -4,6 +4,8 @@ The purpose of the extension is to manage the definition of the Elastic Cloud ru
 
 Initially this project will focus on managing Elastic Fleet Agent Policies.
 
+This project should implement comprehensive unit tests.
+
 The intent of the extension is to provide a way to maintin the infrastructure as code definitions, without a developer needing to understand the exact json structure of every API's Payload.
 
 It will allow the developed a design-time experience equivalent to managing an Elastic CLoud deployment via Click-Ops.
