@@ -6,6 +6,7 @@ import {
   FleetDownloadSource,
   FleetProxy,
   IlmPolicyDefinition,
+  IndexTemplateDefinition,
   IngestPipelineDefinition,
   IntegrationPolicy,
 } from '../../src/models';
@@ -15,6 +16,7 @@ import {
   deleteFleetDownloadSource,
   deleteFleetProxy,
   deleteIlmPolicy,
+  deleteIndexTemplate,
   deleteIngestPipeline,
   deleteIntegrationPolicy,
   getFleetDownloadSourceRefs,
@@ -24,12 +26,14 @@ import {
   listFleetDownloadSources,
   listFleetProxies,
   listIlmPolicies,
+  listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
   saveIlmPolicy,
+  saveIndexTemplate,
   saveIngestPipeline,
   saveIntegrationPolicy,
 } from '../../src/repositories';
@@ -93,6 +97,14 @@ function ingestPipelineFixture(overrides: Partial<IngestPipelineDefinition> = {}
   return {
     name: 'logs-emailengine_wildfly@custom',
     processors: [{ set: { field: 'event.dataset', value: 'emailengine.wildfly' } }],
+    ...overrides,
+  };
+}
+
+function indexTemplateFixture(overrides: Partial<IndexTemplateDefinition> = {}): IndexTemplateDefinition {
+  return {
+    name: 'logs-myapp',
+    index_patterns: ['logs-myapp-*'],
     ...overrides,
   };
 }
@@ -602,6 +614,93 @@ describe('repositories', () => {
     it('deletes a pipeline file', async () => {
       const filePath = await saveIngestPipeline(undefined, ingestPipelineFixture());
       await deleteIngestPipeline(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Index Templates ----------
+
+  describe('Index Templates', () => {
+    it('saves a new template as <name>.json', async () => {
+      const filePath = await saveIndexTemplate(undefined, indexTemplateFixture());
+      expect(filePath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Index_Templates', 'logs-myapp.json')
+      );
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved templates sorted by name', async () => {
+      await saveIndexTemplate(undefined, indexTemplateFixture({ name: 'zeta-template' }));
+      await saveIndexTemplate(undefined, indexTemplateFixture({ name: 'alpha-template' }));
+
+      const templates = await listIndexTemplates();
+      expect(templates.map((t) => t.data.name)).toEqual(['alpha-template', 'zeta-template']);
+    });
+
+    it('returns [] when the Index_Templates folder does not exist yet', async () => {
+      expect(await listIndexTemplates()).toEqual([]);
+    });
+
+    it('renames the file when an existing template is saved under a new name', async () => {
+      const original = indexTemplateFixture();
+      const originalPath = await saveIndexTemplate(undefined, original);
+
+      const renamedPath = await saveIndexTemplate(originalPath, { ...original, name: 'renamed-template' });
+
+      expect(renamedPath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Index_Templates', 'renamed-template.json')
+      );
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a template without changing its name overwrites the same file (no duplicate)', async () => {
+      const original = indexTemplateFixture();
+      const originalPath = await saveIndexTemplate(undefined, original);
+
+      const resavedPath = await saveIndexTemplate(originalPath, {
+        ...original,
+        priority: 200,
+      });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listIndexTemplates()).length).toBe(1);
+    });
+
+    it('rejects saving a template whose name collides with a different existing template', async () => {
+      await saveIndexTemplate(undefined, indexTemplateFixture({ name: 'taken-name' }));
+
+      await expect(
+        saveIndexTemplate(undefined, indexTemplateFixture({ name: 'taken-name' }))
+      ).rejects.toBeInstanceOf(ArtifactConflictError);
+    });
+
+    it('persists optional composed_of/priority/version/_meta/template/data_stream/allow_auto_create/ignore_missing_component_templates/deprecated fields', async () => {
+      const full = indexTemplateFixture({
+        composed_of: ['logs-mappings', 'logs-settings'],
+        priority: 200,
+        version: 3,
+        _meta: { managed_by: 'cmt' },
+        template: {
+          settings: { number_of_shards: 1 },
+          mappings: { properties: { message: { type: 'text' } } },
+          aliases: { 'logs-myapp-alias': {} },
+        },
+        data_stream: { hidden: true, allow_custom_routing: true },
+        allow_auto_create: true,
+        ignore_missing_component_templates: ['maybe-missing'],
+        deprecated: true,
+      });
+      const filePath = await saveIndexTemplate(undefined, full);
+
+      const [saved] = await listIndexTemplates();
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a template file', async () => {
+      const filePath = await saveIndexTemplate(undefined, indexTemplateFixture());
+      await deleteIndexTemplate(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

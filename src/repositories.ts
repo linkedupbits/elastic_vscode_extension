@@ -4,6 +4,7 @@ import {
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
   getIndexLifecyclePoliciesDir,
+  getIndexTemplatesDir,
   getIngestPipelinesDir,
 } from './config';
 import {
@@ -22,6 +23,7 @@ import {
   FleetDownloadSource,
   FleetProxy,
   IlmPolicyDefinition,
+  IndexTemplateDefinition,
   IngestPipelineDefinition,
   IntegrationPolicy,
   NamedRef,
@@ -296,5 +298,44 @@ export async function saveIngestPipeline(
 }
 
 export async function deleteIngestPipeline(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Index Templates ----------
+// Each lives as a *.json file named after its own `name` attribute.
+
+export async function listIndexTemplates(): Promise<LoadedArtifact<IndexTemplateDefinition>[]> {
+  const files = await listJsonFiles(getIndexTemplatesDir());
+  const items = await Promise.all(
+    files.map(async (filePath) => ({
+      filePath,
+      data: await readJsonFile<IndexTemplateDefinition>(filePath),
+    }))
+  );
+  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+}
+
+/**
+ * Creates or updates an Index Template. If the name changed on an existing template, the
+ * json file is renamed to match.
+ */
+export async function saveIndexTemplate(
+  existingFilePath: string | undefined,
+  data: IndexTemplateDefinition
+): Promise<string> {
+  const targetFile = path.join(getIndexTemplatesDir(), `${data.name}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`An Index Template named "${data.name}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteIndexTemplate(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

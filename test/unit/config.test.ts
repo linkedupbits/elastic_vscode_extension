@@ -5,6 +5,7 @@ import {
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
   getIndexLifecyclePoliciesDir,
+  getIndexTemplatesDir,
   getIngestPipelinesDir,
   NoWorkspaceError,
 } from '../../src/config';
@@ -67,6 +68,10 @@ describe('config', () => {
       expect(getIngestPipelinesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Ingest_Pipelines'));
     });
 
+    it('getIndexTemplatesDir', () => {
+      expect(getIndexTemplatesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Index_Templates'));
+    });
+
     it('each helper propagates NoWorkspaceError when the workspace closes', () => {
       __resetWorkspace();
       expect(() => getFleetProxiesDir()).toThrow(NoWorkspaceError);
@@ -74,6 +79,7 @@ describe('config', () => {
       expect(() => getFleetAgentPoliciesDir()).toThrow(NoWorkspaceError);
       expect(() => getIndexLifecyclePoliciesDir()).toThrow(NoWorkspaceError);
       expect(() => getIngestPipelinesDir()).toThrow(NoWorkspaceError);
+      expect(() => getIndexTemplatesDir()).toThrow(NoWorkspaceError);
     });
   });
 });

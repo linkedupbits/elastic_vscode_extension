@@ -3,6 +3,7 @@ import { NoWorkspaceError } from './config';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
 import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
+import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
 import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
@@ -14,6 +15,7 @@ import {
   deleteFleetDownloadSource,
   deleteFleetProxy,
   deleteIlmPolicy,
+  deleteIndexTemplate,
   deleteIngestPipeline,
   deleteIntegrationPolicy,
 } from './repositories';
@@ -77,6 +79,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('elasticSource.newIndexTemplate', () => {
+      try {
+        IndexTemplateEditorPanel.openNew(context.extensionUri, refresh);
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
       async (args: { artifactType: ArtifactType; filePath: string }) => {
@@ -95,6 +105,9 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           case 'ingestpipeline':
             IngestPipelineEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
+            break;
+          case 'indextemplate':
+            IndexTemplateEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
@@ -152,6 +165,9 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'ingestpipeline':
           await deleteIngestPipeline(item.filePath);
           break;
+        case 'indextemplate':
+          await deleteIndexTemplate(item.filePath);
+          break;
       }
       refresh();
     }),
@@ -172,7 +188,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const watcherGlob =
-    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines}/**/*.json';
+    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines,Index_Templates}/**/*.json';
   const watcher = vscode.workspace.createFileSystemWatcher(watcherGlob);
   watcher.onDidCreate(() => refresh());
   watcher.onDidChange(() => refresh());

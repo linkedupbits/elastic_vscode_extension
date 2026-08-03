@@ -6,6 +6,7 @@ import {
   saveFleetDownloadSource,
   saveFleetProxy,
   saveIlmPolicy,
+  saveIndexTemplate,
   saveIngestPipeline,
   saveIntegrationPolicy,
 } from '../../src/repositories';
@@ -43,6 +44,7 @@ describe('ElasticTreeProvider', () => {
         'category-agentpolicies',
         'category-ilmpolicies',
         'category-ingestpipelines',
+        'category-indextemplates',
       ]);
     });
 
@@ -62,6 +64,7 @@ describe('ElasticTreeProvider', () => {
         'category-agentpolicies',
         'category-ilmpolicies',
         'category-ingestpipelines',
+        'category-indextemplates',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
@@ -69,6 +72,7 @@ describe('ElasticTreeProvider', () => {
         'Fleet Agent Policies',
         'Index Lifecycle Policies',
         'Ingest Pipelines',
+        'Index Templates',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -319,6 +323,45 @@ describe('ElasticTreeProvider', () => {
       const [item] = await provider.getChildren(category);
 
       expect(item.description).toBe('0 processor(s)');
+    });
+  });
+
+  describe('Index Templates category', () => {
+    it('is empty when no templates exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the joined index patterns as description', async () => {
+      await saveIndexTemplate(undefined, {
+        name: 'logs-myapp',
+        index_patterns: ['logs-myapp-*', 'logs-myapp-legacy-*'],
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('logs-myapp');
+      expect(item.contextValue).toBe('indextemplate');
+      expect(item.artifactType).toBe('indextemplate');
+      expect(item.description).toBe('logs-myapp-*, logs-myapp-legacy-*');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'indextemplate', filePath: item.filePath });
+    });
+
+    it('treats a legacy/malformed file with no index_patterns key as an empty description', async () => {
+      const indexTemplatesDir = path.join(workspaceRoot, 'Elastic_Source', 'Index_Templates');
+      fs.mkdirSync(indexTemplatesDir, { recursive: true });
+      fs.writeFileSync(path.join(indexTemplatesDir, 'legacy-template.json'), JSON.stringify({ name: 'legacy-template' }));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.description).toBe('');
     });
   });
 

@@ -118,3 +118,35 @@ export interface IngestPipelineDefinition {
   _meta?: Record<string, unknown>;
   deprecated?: boolean;
 }
+
+export interface IndexTemplateDataStream {
+  hidden?: boolean;
+  allow_custom_routing?: boolean;
+}
+
+/**
+ * Body shape of the Elasticsearch Put Index Template API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-put-index-template).
+ * Maps directly onto the real API body - there's no wrapper key - except for `name`, which
+ * isn't part of the body (it's the URL path segment) but is kept here since it drives the
+ * saved file name. `template.settings`/`template.mappings`/`template.aliases` are left
+ * free-form since index settings and field mappings are both open-ended schemas (arbitrarily
+ * nested field types, plugin-provided settings, etc), unlike the rest of this shape.
+ */
+export interface IndexTemplateDefinition {
+  name: string;
+  index_patterns: string[];
+  composed_of?: string[];
+  priority?: number;
+  version?: number;
+  _meta?: Record<string, unknown>;
+  template?: {
+    settings?: Record<string, unknown>;
+    mappings?: Record<string, unknown>;
+    aliases?: Record<string, unknown>;
+  };
+  data_stream?: IndexTemplateDataStream;
+  allow_auto_create?: boolean;
+  ignore_missing_component_templates?: string[];
+  deprecated?: boolean;
+}

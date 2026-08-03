@@ -190,3 +190,42 @@ The structure of the json follows the request body of the [Put Pipeline API](htt
   * A final **Custom / Other...** option for any processor type not in that curated list (e.g. `enrich`, plugin-provided processors, or future processor types), which instead exposes a free-text **Processor Type** name plus a JSON **Configuration** object for that type's parameters - this is also what any pipeline containing an uncurated processor type falls back to when reopened, so no data is lost.
   * Common **Tag**, **Condition** (Painless `if`) and **Ignore Failure** fields, supported by every processor type per the Put Pipeline API and rendered the same way regardless of which type is selected.
 * `description`, `version`, `_meta` and `deprecated` are all optional and are omitted from the saved json entirely when left blank/unset rather than being written out empty. `_meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.
+
+`/Elastic_Source/Index_Templates/` - this folder contains a set of json files, each of which defines an Elasticsearch index template. Each template is defined in a json file named the same as the template's `name` attribute, eg `/Elastic_Source/Index_Templates/logs-myapp.json`.
+
+The structure of the json follows the request body of the [Put Index Template API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-put-index-template) directly (there's no wrapper key), with `name` added at the top level since the API takes the template name from the URL path rather than the body:
+```json
+{
+  "name": "logs-myapp",
+  "index_patterns": ["logs-myapp-*"],
+  "composed_of": ["logs-mappings", "logs-settings"],
+  "priority": 200,
+  "version": 1,
+  "data_stream": {
+    "hidden": false
+  },
+  "allow_auto_create": true,
+  "template": {
+    "settings": {
+      "number_of_shards": 1
+    },
+    "mappings": {
+      "properties": {
+        "message": { "type": "text" }
+      }
+    }
+  },
+  "_meta": {
+    "managed_by": "cmt"
+  }
+}
+```
+* The file name must be the same as the `name` attribute.
+* Every field with a fixed, bounded shape is edited as a structured control rather than raw JSON (see `src/editors/indexTemplateEditorPanel.ts`):
+  * **Index Patterns** (required, at least one) and **Composed Of** / **Ignore Missing Component Templates** (both optional) are each edited as a newline-separated list, one entry per line, mirroring the stringArray field convention used elsewhere in this project.
+  * **Priority** and **Version** are optional numeric fields.
+  * **Allow Auto Create** is a three-way dropdown - "(default)" (omitted from the saved json, letting the cluster setting apply), "True" or "False" - since Elasticsearch treats "unset" as meaningfully different from an explicit `false`.
+  * **Data Stream Template** is a checkbox that toggles whether a `data_stream` object is saved at all; when enabled, its own **Hidden** and **Allow Custom Routing** checkboxes are shown.
+  * **Deprecated** is a plain checkbox.
+* `template.settings`, `template.mappings` and `template.aliases` are each their own optional free-form JSON object editor (omitted entirely, and from the saved `template` object, when left blank) rather than structured fields, since index settings and field mappings are both open-ended/arbitrarily nested Elasticsearch schemas - the same rationale as `_meta` and the Ingest Pipeline custom-processor configuration.
+* `_meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.

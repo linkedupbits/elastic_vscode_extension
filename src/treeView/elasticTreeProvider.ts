@@ -5,6 +5,7 @@ import {
   listFleetDownloadSources,
   listFleetProxies,
   listIlmPolicies,
+  listIndexTemplates,
   listIngestPipelines,
   listIntegrationPolicies,
 } from '../repositories';
@@ -35,6 +36,11 @@ const CATEGORIES = [
     id: 'category-ingestpipelines',
     label: 'Ingest Pipelines',
     icon: 'gear',
+  },
+  {
+    id: 'category-indextemplates',
+    label: 'Index Templates',
+    icon: 'layers',
   },
 ] as const;
 
@@ -73,6 +79,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getIlmPolicyItems();
         case 'category-ingestpipelines':
           return await this.getIngestPipelineItems();
+        case 'category-indextemplates':
+          return await this.getIndexTemplateItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -181,6 +189,25 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             command: 'elasticSource.openArtifact',
             title: 'Open',
             arguments: [{ artifactType: 'ingestpipeline', filePath }],
+          },
+        })
+    );
+  }
+
+  private async getIndexTemplateItems(): Promise<ElasticTreeItem[]> {
+    const templates = await listIndexTemplates();
+    return templates.map(
+      ({ filePath, data }) =>
+        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+          contextValue: 'indextemplate',
+          iconPath: new vscode.ThemeIcon('layers'),
+          description: (data.index_patterns ?? []).join(', '),
+          filePath,
+          artifactType: 'indextemplate',
+          command: {
+            command: 'elasticSource.openArtifact',
+            title: 'Open',
+            arguments: [{ artifactType: 'indextemplate', filePath }],
           },
         })
     );

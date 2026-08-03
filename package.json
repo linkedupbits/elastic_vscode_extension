@@ -20,7 +20,7 @@
         "elasticSource.rootFolder": {
           "type": "string",
           "default": "Elastic_Source",
-          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies and Ingest_Pipelines."
+          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines and Index_Templates."
         }
       }
     },
@@ -86,6 +86,12 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.newIndexTemplate",
+        "title": "New Index Template",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.openArtifact",
         "title": "Open",
         "category": "Elastic Source"
@@ -143,13 +149,18 @@
           "group": "inline"
         },
         {
+          "command": "elasticSource.newIndexTemplate",
+          "when": "view == elasticSourceExplorer && viewItem == category-indextemplates",
+          "group": "inline"
+        },
+        {
           "command": "elasticSource.deleteArtifact",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate)",
           "group": "inline@2"
         },
         {
           "command": "elasticSource.revealInExplorer",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate)",
           "group": "7_modification"
         }
       ],

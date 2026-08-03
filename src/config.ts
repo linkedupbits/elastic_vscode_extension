@@ -42,3 +42,7 @@ export function getIndexLifecyclePoliciesDir(): string {
 export function getIngestPipelinesDir(): string {
   return path.join(getElasticSourceRoot(), 'Ingest_Pipelines');
 }
+
+export function getIndexTemplatesDir(): string {
+  return path.join(getElasticSourceRoot(), 'Index_Templates');
+}
