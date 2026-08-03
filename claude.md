@@ -134,4 +134,11 @@ The structure of the json follows the request body of the [ILM Put Lifecycle API
 }
 ```
 * The file name must be the same as the `name` attribute.
-* Since the `phases`/`actions` schema is large and varies per phase, the extension exposes `phases` (and the optional `policy._meta`) as structured JSON editors rather than one input per possible action, while still validating that `phases` is a JSON object whose keys are limited to `hot`, `warm`, `cold`, `frozen`, `delete`.
+* Each phase (`hot`, `warm`, `cold`, `frozen`, `delete`) is rendered as its own collapsible, structured section with a checkbox to include/exclude that phase entirely, a "Minimum Age" field, and a checkbox-per-action to include/exclude each of that phase's actions along with that action's own fields - mirroring the inputs → streams → vars template pattern already used for Integration Policies (see `src/ilm/ilmPhaseTemplate.ts`). Disabled phases/actions are omitted entirely from the saved json rather than written out with default/empty values.
+  * Hot: `rollover` (max_age, max_primary_shard_size, max_docs), `set_priority` (priority), `forcemerge` (max_num_segments), `shrink` (number_of_shards), `readonly`.
+  * Warm: `set_priority`, `allocate` (number_of_replicas), `forcemerge`, `shrink`, `migrate` (enabled), `readonly`.
+  * Cold: `set_priority`, `allocate`, `searchable_snapshot` (snapshot_repository), `migrate`, `readonly`.
+  * Frozen: `searchable_snapshot` (snapshot_repository).
+  * Delete: `wait_for_snapshot` (policy), `delete` (delete_searchable_snapshot).
+  * At least one phase must be enabled before saving.
+* `policy._meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.
