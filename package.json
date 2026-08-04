@@ -2,7 +2,7 @@
   "name": "elastic-source-manager",
   "displayName": "Elastic Source Manager",
   "description": "Manage Elastic Cloud run-time artifact definitions (Fleet Agent Policies, Download Sources, Proxies) as infrastructure-as-code, without hand-editing JSON.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "elastic-source",
   "license": "BSD-3-Clause",
   "repository": {

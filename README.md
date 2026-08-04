@@ -25,9 +25,9 @@ other code.
 - The one exception is the **Connections** category: register an Elastic Cloud deployment
   (Cloud ID + API Key) to browse its *live* data. The API key is stored in VS Code's
   [SecretStorage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage) -
-  never written to disk - and is used to fetch that deployment's Kibana Spaces and Fleet
-  Agent Policies (each with its assigned Integration Policies nested underneath) on demand,
-  shown read-only under the connection in the tree.
+  never written to disk - and is used to fetch that deployment's Kibana Spaces, and its Fleet
+  Agent Policies per Kibana Space (each agent policy with its assigned Integration Policies
+  nested underneath), on demand, shown read-only under the connection in the tree.
 
 ![alt text](docs/explorer.png)
 
@@ -66,14 +66,19 @@ tree shows two live nodes, each fetched from that deployment on expand and shown
 none of it is saved locally unless you explicitly download it:
 - **Spaces**, via Kibana's
   [Get All Spaces](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space) API.
-- **Fleet Agent Policies**, via Kibana's
-  [Get Agent Policies](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-agent-policies) API.
-  Expanding this node also fetches that deployment's Integration Policies via the
+- **Fleet Agent Policies** - expands first into one node per Kibana Space (the same list the
+  Spaces node above fetches), since a Fleet Agent Policy isn't confined to a single space and
+  the same policy can appear under more than one. Expanding a space fetches that space's Agent
+  Policies via Kibana's
+  [Get Agent Policies](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-agent-policies)
+  API, scoped to it using Kibana's space-aware URL convention (`/s/<space_id>/...`) - the
+  "default" space uses the plain, unprefixed endpoint. Expanding a space also fetches that
+  deployment's Integration Policies for it via the
   [Get Package Policies](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-package-policies)
   API - concurrently with the agent policies, so neither request blocks the other - and assigns
-  each one to the agent policy/policies it belongs to (matching Fleet's own `policy_id`/
-  `policy_ids` fields), nesting them as expandable children under their owning agent policy.
-  Opening one of these Integration Policies shows a read-only structured view - the same
+  each one to the agent policy/policies it belongs to within that space (matching Fleet's own
+  `policy_id`/`policy_ids` fields), nesting them as expandable children under their owning agent
+  policy. Opening one of these Integration Policies shows a read-only structured view - the same
   input/stream/var screen the editable form uses, rendered by the same client-side code, just
   with every control disabled and no Save button, for a consistent look between viewing a live
   policy and editing a downloaded one.
