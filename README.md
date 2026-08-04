@@ -10,8 +10,9 @@ other code.
 ## What it does
 
 - Adds an **Elastic Source** view to the Activity Bar, backed by the VS Code
-  [Tree View API](https://code.visualstudio.com/api/extension-guides/tree-view), so you can
-  browse every artifact type as a category with its saved instances underneath.
+  [Tree View API](https://code.visualstudio.com/api/extension-guides/tree-view). The tree has
+  two top-level nodes: **Project**, with every file-backed artifact type nested underneath as
+  a category with its saved instances, and **Connections** (see below).
 - Selecting an artifact opens a **structured editor** (a webview form) instead of the raw
   JSON file — fields, dropdowns, checkboxes and repeatable rows map directly onto the shape
   of the corresponding Elasticsearch/Fleet API. Genuinely open-ended sub-structures (Query

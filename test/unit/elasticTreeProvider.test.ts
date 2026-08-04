@@ -18,6 +18,7 @@ import {
   saveSnapshotPolicy,
   saveSpace,
 } from '../../src/repositories';
+import { ElasticTreeItem } from '../../src/treeView/elasticTreeItem';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -29,6 +30,20 @@ const mockFetchAgentPolicies = fetchAgentPolicies as jest.MockedFunction<typeof 
 const VALID_CLOUD_ID = `staging:${Buffer.from('us-east-1.aws.found.io$abcd1234$efgh5678', 'utf8').toString(
   'base64'
 )}`;
+
+/** contextValues of the file-backed categories nested under the top-level "Project" node, in display order. */
+const PROJECT_CATEGORY_CONTEXT_VALUES = [
+  'category-proxies',
+  'category-downloadsources',
+  'category-agentpolicies',
+  'category-ilmpolicies',
+  'category-ingestpipelines',
+  'category-indextemplates',
+  'category-roles',
+  'category-rolemappings',
+  'category-spaces',
+  'category-snapshotpolicies',
+];
 
 describe('ElasticTreeProvider', () => {
   let workspaceRoot: string;
@@ -49,55 +64,52 @@ describe('ElasticTreeProvider', () => {
     removeTempDir(workspaceRoot);
   });
 
+  /** Expands the root "Project" node - every file-backed category (Fleet Proxies, Spaces, etc.) now lives under it. */
+  async function getProjectCategories(): Promise<ElasticTreeItem[]> {
+    const roots = await provider.getChildren();
+    const projectNode = roots.find((c) => c.contextValue === 'category-project')!;
+    return provider.getChildren(projectNode);
+  }
+
   it('getTreeItem returns the element unchanged', () => {
     const fake = { label: 'x' } as never;
     expect(provider.getTreeItem(fake)).toBe(fake);
   });
 
   describe('root level', () => {
-    it('shows the top-level categories even when no workspace is open (they only fail on expand)', async () => {
+    it('shows the top-level nodes even when no workspace is open (they only fail on expand)', async () => {
       vscodeMock.__resetWorkspace();
       const children = await provider.getChildren();
-      expect(children.map((c) => c.contextValue)).toEqual([
-        'category-connections',
-        'category-proxies',
-        'category-downloadsources',
-        'category-agentpolicies',
-        'category-ilmpolicies',
-        'category-ingestpipelines',
-        'category-indextemplates',
-        'category-roles',
-        'category-rolemappings',
-        'category-spaces',
-        'category-snapshotpolicies',
-      ]);
+      expect(children.map((c) => c.contextValue)).toEqual(['category-connections', 'category-project']);
     });
 
-    it('expanding a category with no workspace open shows an "open a folder" message item', async () => {
+    it('expanding Project with no workspace open still lists its categories (Project itself is static)', async () => {
       vscodeMock.__resetWorkspace();
-      const [firstCategory] = await provider.getChildren();
-      const children = await provider.getChildren(firstCategory);
+      const [, projectNode] = await provider.getChildren();
+      const children = await provider.getChildren(projectNode);
+      expect(children.map((c) => c.contextValue)).toEqual(PROJECT_CATEGORY_CONTEXT_VALUES);
+    });
+
+    it('expanding Connections with no workspace open shows an "open a folder" message item', async () => {
+      vscodeMock.__resetWorkspace();
+      const [connectionsNode] = await provider.getChildren();
+      const children = await provider.getChildren(connectionsNode);
       expect(children).toHaveLength(1);
       expect(children[0].contextValue).toBe('message');
     });
 
-    it('shows the top-level categories, all collapsed', async () => {
+    it('shows Connections and Project as the top-level nodes, both collapsed', async () => {
       const children = await provider.getChildren();
-      expect(children.map((c) => c.contextValue)).toEqual([
-        'category-connections',
-        'category-proxies',
-        'category-downloadsources',
-        'category-agentpolicies',
-        'category-ilmpolicies',
-        'category-ingestpipelines',
-        'category-indextemplates',
-        'category-roles',
-        'category-rolemappings',
-        'category-spaces',
-        'category-snapshotpolicies',
-      ]);
-      expect(children.map((c) => c.label)).toEqual([
-        'Connections',
+      expect(children.map((c) => c.contextValue)).toEqual(['category-connections', 'category-project']);
+      expect(children.map((c) => c.label)).toEqual(['Connections', 'Project']);
+      // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
+      expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
+    });
+
+    it('expanding Project shows every file-backed artifact category, all collapsed', async () => {
+      const categories = await getProjectCategories();
+      expect(categories.map((c) => c.contextValue)).toEqual(PROJECT_CATEGORY_CONTEXT_VALUES);
+      expect(categories.map((c) => c.label)).toEqual([
         'Fleet Proxies',
         'Fleet Download Sources',
         'Fleet Agent Policies',
@@ -109,14 +121,21 @@ describe('ElasticTreeProvider', () => {
         'Spaces',
         'Snapshot Policies',
       ]);
-      // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
-      expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
+      expect(categories.every((c) => c.collapsibleState === 1)).toBe(true);
+    });
+
+    it('expanding a file-backed category with no workspace open shows an "open a folder" message item', async () => {
+      vscodeMock.__resetWorkspace();
+      const [proxiesCategory] = await getProjectCategories();
+      const children = await provider.getChildren(proxiesCategory);
+      expect(children).toHaveLength(1);
+      expect(children[0].contextValue).toBe('message');
     });
   });
 
   describe('Fleet Proxies category', () => {
     it('is empty when no proxies exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       expect(await provider.getChildren(proxiesCategory)).toEqual([]);
     });
@@ -132,7 +151,7 @@ describe('ElasticTreeProvider', () => {
         is_preconfigured: false,
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const [proxyItem] = await provider.getChildren(proxiesCategory);
 
@@ -156,7 +175,7 @@ describe('ElasticTreeProvider', () => {
         proxy_id: '',
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const downloadSourcesCategory = children.find((c) => c.contextValue === 'category-downloadsources')!;
       const [item] = await provider.getChildren(downloadSourcesCategory);
 
@@ -175,7 +194,7 @@ describe('ElasticTreeProvider', () => {
         proxy_id: '',
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const downloadSourcesCategory = children.find((c) => c.contextValue === 'category-downloadsources')!;
       const [item] = await provider.getChildren(downloadSourcesCategory);
 
@@ -197,7 +216,7 @@ describe('ElasticTreeProvider', () => {
         advanced_settings: {},
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const agentPoliciesCategory = children.find((c) => c.contextValue === 'category-agentpolicies')!;
       const [policyItem] = await provider.getChildren(agentPoliciesCategory);
 
@@ -232,7 +251,7 @@ describe('ElasticTreeProvider', () => {
         vars: {},
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const agentPoliciesCategory = children.find((c) => c.contextValue === 'category-agentpolicies')!;
       const [policyItem] = await provider.getChildren(agentPoliciesCategory);
       const integrationItems = await provider.getChildren(policyItem);
@@ -257,7 +276,7 @@ describe('ElasticTreeProvider', () => {
         advanced_settings: {},
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const agentPoliciesCategory = children.find((c) => c.contextValue === 'category-agentpolicies')!;
       const [policyItem] = await provider.getChildren(agentPoliciesCategory);
 
@@ -267,7 +286,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Index Lifecycle Policies category', () => {
     it('is empty when no policies exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
       expect(await provider.getChildren(ilmCategory)).toEqual([]);
     });
@@ -284,7 +303,7 @@ describe('ElasticTreeProvider', () => {
         integration_lifecycle_mappings: [],
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
       const [item] = await provider.getChildren(ilmCategory);
 
@@ -302,7 +321,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(ilmDir, { recursive: true });
       fs.writeFileSync(path.join(ilmDir, 'legacy-policy.json'), JSON.stringify({ name: 'legacy-policy' }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const ilmCategory = children.find((c) => c.contextValue === 'category-ilmpolicies')!;
       const [item] = await provider.getChildren(ilmCategory);
 
@@ -312,7 +331,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Ingest Pipelines category', () => {
     it('is empty when no pipelines exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -324,7 +343,7 @@ describe('ElasticTreeProvider', () => {
         processors: [{ set: { field: 'event.dataset', value: 'emailengine.wildfly' } }],
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
       const [item] = await provider.getChildren(category);
 
@@ -343,7 +362,7 @@ describe('ElasticTreeProvider', () => {
         processors: [{ set: { field: 'a', value: '1' } }, { remove: { field: 'b' } }],
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
       const [item] = await provider.getChildren(category);
 
@@ -355,7 +374,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(ingestDir, { recursive: true });
       fs.writeFileSync(path.join(ingestDir, 'legacy-pipeline.json'), JSON.stringify({}));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;
       const [item] = await provider.getChildren(category);
 
@@ -365,7 +384,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Index Templates category', () => {
     it('is empty when no templates exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -376,7 +395,7 @@ describe('ElasticTreeProvider', () => {
         index_patterns: ['logs-myapp-*', 'logs-myapp-legacy-*'],
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
       const [item] = await provider.getChildren(category);
 
@@ -394,7 +413,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(indexTemplatesDir, { recursive: true });
       fs.writeFileSync(path.join(indexTemplatesDir, 'legacy-template.json'), JSON.stringify({ name: 'legacy-template' }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-indextemplates')!;
       const [item] = await provider.getChildren(category);
 
@@ -404,7 +423,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Roles category', () => {
     it('is empty when no roles exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-roles')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -416,7 +435,7 @@ describe('ElasticTreeProvider', () => {
         cluster: ['monitor'],
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(category);
 
@@ -432,7 +451,7 @@ describe('ElasticTreeProvider', () => {
     it('falls back to the joined cluster privileges when no description is set', async () => {
       await saveRole(undefined, { name: 'cmt_monitor', cluster: ['monitor', 'manage_own_api_key'] });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(category);
 
@@ -444,7 +463,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(rolesDir, { recursive: true });
       fs.writeFileSync(path.join(rolesDir, 'legacy-role.json'), JSON.stringify({ 'legacy-role': {} }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(category);
 
@@ -454,7 +473,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Role Mappings category', () => {
     it('is empty when no role mappings exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -466,7 +485,7 @@ describe('ElasticTreeProvider', () => {
         rules: { field: { username: '*' } },
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       const [item] = await provider.getChildren(category);
 
@@ -486,7 +505,7 @@ describe('ElasticTreeProvider', () => {
         rules: { field: { username: '*' } },
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       const [item] = await provider.getChildren(category);
 
@@ -501,7 +520,7 @@ describe('ElasticTreeProvider', () => {
         rules: { field: { username: '*' } },
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       const [item] = await provider.getChildren(category);
 
@@ -513,7 +532,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(roleMappingsDir, { recursive: true });
       fs.writeFileSync(path.join(roleMappingsDir, 'legacy-mapping.json'), JSON.stringify({ 'legacy-mapping': {} }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       const [item] = await provider.getChildren(category);
 
@@ -523,7 +542,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Spaces category', () => {
     it('is empty when no spaces exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-spaces')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -531,7 +550,7 @@ describe('ElasticTreeProvider', () => {
     it('shows the space id as description', async () => {
       await saveSpace(undefined, { id: 'marketing', name: 'Marketing' });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-spaces')!;
       const [item] = await provider.getChildren(category);
 
@@ -717,7 +736,7 @@ describe('ElasticTreeProvider', () => {
 
   describe('Snapshot Policies category', () => {
     it('is empty when no snapshot policies exist', async () => {
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-snapshotpolicies')!;
       expect(await provider.getChildren(category)).toEqual([]);
     });
@@ -730,7 +749,7 @@ describe('ElasticTreeProvider', () => {
         repository: 'my_repository',
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-snapshotpolicies')!;
       const [item] = await provider.getChildren(category);
 
@@ -767,7 +786,7 @@ describe('ElasticTreeProvider', () => {
         is_preconfigured: false,
       });
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const items = await provider.getChildren(proxiesCategory);
 
@@ -782,7 +801,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(proxiesDir, { recursive: true });
       fs.writeFileSync(path.join(proxiesDir, 'corrupt.json'), '{ not valid json');
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const [errorItem] = await provider.getChildren(proxiesCategory);
 
@@ -799,7 +818,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(rolesDir, { recursive: true });
       fs.writeFileSync(path.join(rolesDir, 'errorRole.json'), JSON.stringify({ BadlyFormatted: 'Json' }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const rolesCategory = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(rolesCategory);
 
@@ -812,7 +831,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(rolesDir, { recursive: true });
       fs.writeFileSync(path.join(rolesDir, 'empty.json'), JSON.stringify({}));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const rolesCategory = children.find((c) => c.contextValue === 'category-roles')!;
       const [item] = await provider.getChildren(rolesCategory);
 
@@ -825,7 +844,7 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(roleMappingsDir, { recursive: true });
       fs.writeFileSync(path.join(roleMappingsDir, 'errorfile.json'), JSON.stringify({ BadlyFormatted: 'Json' }));
 
-      const children = await provider.getChildren();
+      const children = await getProjectCategories();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
       const [item] = await provider.getChildren(category);
 

@@ -24,12 +24,21 @@ import {
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
 
-const CATEGORIES = [
+const TOP_LEVEL_CATEGORIES = [
   {
     id: 'category-connections',
     label: 'Connections',
     icon: 'plug',
   },
+  {
+    id: 'category-project',
+    label: 'Project',
+    icon: 'folder',
+  },
+] as const;
+
+/** File-backed artifact categories, all nested under the top-level "Project" node. */
+const PROJECT_CATEGORIES = [
   {
     id: 'category-proxies',
     label: 'Fleet Proxies',
@@ -99,7 +108,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
   async getChildren(element?: ElasticTreeItem): Promise<ElasticTreeItem[]> {
     try {
       if (!element) {
-        return CATEGORIES.map(
+        return TOP_LEVEL_CATEGORIES.map(
           (c) =>
             new ElasticTreeItem(c.label, vscode.TreeItemCollapsibleState.Collapsed, {
               contextValue: c.id,
@@ -109,6 +118,14 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
       }
 
       switch (element.contextValue) {
+        case 'category-project':
+          return PROJECT_CATEGORIES.map(
+            (c) =>
+              new ElasticTreeItem(c.label, vscode.TreeItemCollapsibleState.Collapsed, {
+                contextValue: c.id,
+                iconPath: new vscode.ThemeIcon(c.icon),
+              })
+          );
         case 'category-connections':
           return await this.getConnectionItems();
         case 'connection':
