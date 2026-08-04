@@ -1,0 +1,13 @@
+{
+  "id": "test_space",
+  "name": "Test Space",
+  "description": "A test space!",
+  "color": "#DD4DFA",
+  "initials": "TS",
+  "imageUrl": "",
+  "disabledFeatures": [
+    "stackAlerts",
+    "maintenanceWindow",
+    "rulesSettings"
+  ]
+}
