@@ -40,21 +40,73 @@ export interface LoadedArtifact<T> {
   data: T;
 }
 
+/** A *.json file that exists but failed to load (e.g. invalid JSON). */
+export interface FailedArtifact {
+  filePath: string;
+  error: Error;
+}
+
+/** The result of loading one artifact file: either its parsed data, or the error that loading it threw. */
+export type ArtifactResult<T> = LoadedArtifact<T> | FailedArtifact;
+
+export function isLoadedArtifact<T>(item: ArtifactResult<T>): item is LoadedArtifact<T> {
+  return 'data' in item;
+}
+
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+/**
+ * A file can be syntactically valid JSON while still being unusable (e.g. missing the `name`
+ * every artifact is keyed/displayed by). Since `readJsonFile` only throws on a JSON syntax
+ * error, this check is what makes that kind of malformed-but-parseable file surface as a load
+ * error too, instead of rendering as a tree item with a blank/garbage label.
+ */
+function assertHasName<T extends { name: string }>(data: T, filePath: string): void {
+  if (typeof data?.name !== 'string' || data.name.trim() === '') {
+    throw new Error(`"${path.basename(filePath)}" is missing a valid "name" field.`);
+  }
+}
+
+/** Sorts loaded artifacts by name, falling back to the file name for any that failed to load. */
+function sortArtifacts<T extends { name: string }>(items: ArtifactResult<T>[]): ArtifactResult<T>[] {
+  const sortKey = (item: ArtifactResult<T>): string =>
+    isLoadedArtifact(item) ? item.data.name : path.basename(item.filePath);
+  return items.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+}
+
+/** Reads each file with `load`, catching per-file errors instead of letting one bad file fail the whole list. */
+async function loadArtifacts<T extends { name: string }>(
+  files: string[],
+  load: (filePath: string) => Promise<T>
+): Promise<ArtifactResult<T>[]> {
+  const items = await Promise.all(
+    files.map(async (filePath): Promise<ArtifactResult<T>> => {
+      try {
+        const data = await load(filePath);
+        assertHasName(data, filePath);
+        return { filePath, data };
+      } catch (err) {
+        return { filePath, error: toError(err) };
+      }
+    })
+  );
+  return sortArtifacts(items);
+}
+
 export class ArtifactConflictError extends Error {}
 
 // ---------- Fleet Proxies ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listFleetProxies(): Promise<LoadedArtifact<FleetProxy>[]> {
+export async function listFleetProxies(): Promise<ArtifactResult<FleetProxy>[]> {
   const files = await listJsonFiles(getFleetProxiesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({ filePath, data: await readJsonFile<FleetProxy>(filePath) }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<FleetProxy>(filePath));
 }
 
 export async function getFleetProxyRefs(): Promise<NamedRef[]> {
-  return (await listFleetProxies()).map(({ data }) => ({ id: data.id, name: data.name }));
+  return (await listFleetProxies()).filter(isLoadedArtifact).map(({ data }) => ({ id: data.id, name: data.name }));
 }
 
 /**
@@ -85,19 +137,15 @@ export async function deleteFleetProxy(filePath: string): Promise<void> {
 // ---------- Fleet Download Sources ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listFleetDownloadSources(): Promise<LoadedArtifact<FleetDownloadSource>[]> {
+export async function listFleetDownloadSources(): Promise<ArtifactResult<FleetDownloadSource>[]> {
   const files = await listJsonFiles(getFleetDownloadSourcesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({
-      filePath,
-      data: await readJsonFile<FleetDownloadSource>(filePath),
-    }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<FleetDownloadSource>(filePath));
 }
 
 export async function getFleetDownloadSourceRefs(): Promise<NamedRef[]> {
-  return (await listFleetDownloadSources()).map(({ data }) => ({ id: data.id, name: data.name }));
+  return (await listFleetDownloadSources())
+    .filter(isLoadedArtifact)
+    .map(({ data }) => ({ id: data.id, name: data.name }));
 }
 
 /**
@@ -128,16 +176,22 @@ export async function deleteFleetDownloadSource(filePath: string): Promise<void>
 // ---------- Fleet Agent Policies ----------
 // Each policy lives in its own folder: Fleet_Agent_Policies/<name>/<name>.json
 
-export async function listFleetAgentPolicies(): Promise<LoadedArtifact<FleetAgentPolicy>[]> {
+export async function listFleetAgentPolicies(): Promise<ArtifactResult<FleetAgentPolicy>[]> {
   const folders = await listSubdirectories(getFleetAgentPoliciesDir());
-  const items: LoadedArtifact<FleetAgentPolicy>[] = [];
+  const items: ArtifactResult<FleetAgentPolicy>[] = [];
   for (const folder of folders) {
     const expectedFile = path.join(folder, `${path.basename(folder)}.json`);
     if (await pathExists(expectedFile)) {
-      items.push({ filePath: expectedFile, data: await readJsonFile<FleetAgentPolicy>(expectedFile) });
+      try {
+        const data = await readJsonFile<FleetAgentPolicy>(expectedFile);
+        assertHasName(data, expectedFile);
+        items.push({ filePath: expectedFile, data });
+      } catch (err) {
+        items.push({ filePath: expectedFile, error: toError(err) });
+      }
     }
   }
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return sortArtifacts(items);
 }
 
 /**
@@ -191,12 +245,9 @@ export function getIntegrationsDir(agentPolicyFilePath: string): string {
 
 export async function listIntegrationPolicies(
   agentPolicyFilePath: string
-): Promise<LoadedArtifact<IntegrationPolicy>[]> {
+): Promise<ArtifactResult<IntegrationPolicy>[]> {
   const files = await listJsonFiles(getIntegrationsDir(agentPolicyFilePath));
-  const items = await Promise.all(
-    files.map(async (filePath) => ({ filePath, data: await readJsonFile<IntegrationPolicy>(filePath) }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<IntegrationPolicy>(filePath));
 }
 
 /**
@@ -231,15 +282,9 @@ export async function deleteIntegrationPolicy(filePath: string): Promise<void> {
 // ---------- Index Lifecycle Policies ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listIlmPolicies(): Promise<LoadedArtifact<IlmPolicyDefinition>[]> {
+export async function listIlmPolicies(): Promise<ArtifactResult<IlmPolicyDefinition>[]> {
   const files = await listJsonFiles(getIndexLifecyclePoliciesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({
-      filePath,
-      data: await readJsonFile<IlmPolicyDefinition>(filePath),
-    }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<IlmPolicyDefinition>(filePath));
 }
 
 /**
@@ -270,15 +315,9 @@ export async function deleteIlmPolicy(filePath: string): Promise<void> {
 // ---------- Ingest Pipelines ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listIngestPipelines(): Promise<LoadedArtifact<IngestPipelineDefinition>[]> {
+export async function listIngestPipelines(): Promise<ArtifactResult<IngestPipelineDefinition>[]> {
   const files = await listJsonFiles(getIngestPipelinesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({
-      filePath,
-      data: await readJsonFile<IngestPipelineDefinition>(filePath),
-    }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<IngestPipelineDefinition>(filePath));
 }
 
 /**
@@ -309,15 +348,9 @@ export async function deleteIngestPipeline(filePath: string): Promise<void> {
 // ---------- Index Templates ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listIndexTemplates(): Promise<LoadedArtifact<IndexTemplateDefinition>[]> {
+export async function listIndexTemplates(): Promise<ArtifactResult<IndexTemplateDefinition>[]> {
   const files = await listJsonFiles(getIndexTemplatesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({
-      filePath,
-      data: await readJsonFile<IndexTemplateDefinition>(filePath),
-    }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<IndexTemplateDefinition>(filePath));
 }
 
 /**
@@ -348,12 +381,9 @@ export async function deleteIndexTemplate(filePath: string): Promise<void> {
 // ---------- Roles ----------
 // Each lives as a *.json file named after its own `name` attribute.
 
-export async function listRoles(): Promise<LoadedArtifact<RoleDefinition>[]> {
+export async function listRoles(): Promise<ArtifactResult<RoleDefinition>[]> {
   const files = await listJsonFiles(getRolesDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({ filePath, data: await readJsonFile<RoleDefinition>(filePath) }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, (filePath) => readJsonFile<RoleDefinition>(filePath));
 }
 
 /**
@@ -383,8 +413,15 @@ export async function deleteRole(filePath: string): Promise<void> {
 // stored as the file's root JSON key (matching the Elasticsearch Get Role Mapping API
 // response shape) rather than as a `name` field in the body - see `RoleMappingFile`.
 
-function roleMappingFromFile(file: RoleMappingFile): RoleMappingDefinition {
-  const [name, definition] = Object.entries(file)[0];
+function roleMappingFromFile(file: RoleMappingFile, filePath: string): RoleMappingDefinition {
+  const entries = Object.entries(file);
+  if (entries.length !== 1) {
+    throw new Error(`"${path.basename(filePath)}" must have exactly one root key (the role mapping name).`);
+  }
+  const [name, definition] = entries[0];
+  if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+    throw new Error(`"${path.basename(filePath)}" - the value of "${name}" must be a JSON object.`);
+  }
   return { name, ...definition };
 }
 
@@ -394,15 +431,12 @@ function roleMappingToFile(data: RoleMappingDefinition): RoleMappingFile {
 }
 
 export async function loadRoleMapping(filePath: string): Promise<RoleMappingDefinition> {
-  return roleMappingFromFile(await readJsonFile<RoleMappingFile>(filePath));
+  return roleMappingFromFile(await readJsonFile<RoleMappingFile>(filePath), filePath);
 }
 
-export async function listRoleMappings(): Promise<LoadedArtifact<RoleMappingDefinition>[]> {
+export async function listRoleMappings(): Promise<ArtifactResult<RoleMappingDefinition>[]> {
   const files = await listJsonFiles(getRoleMappingsDir());
-  const items = await Promise.all(
-    files.map(async (filePath) => ({ filePath, data: await loadRoleMapping(filePath) }))
-  );
-  return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
+  return loadArtifacts(files, loadRoleMapping);
 }
 
 /**

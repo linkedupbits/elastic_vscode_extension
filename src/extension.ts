@@ -204,6 +204,10 @@ export function activate(context: vscode.ExtensionContext): void {
       refresh();
     }),
 
+    vscode.commands.registerCommand('elasticSource.showArtifactLoadError', (message: string) => {
+      void vscode.window.showErrorMessage(message);
+    }),
+
     vscode.commands.registerCommand('elasticSource.revealInExplorer', (item: ElasticTreeItem) => {
       if (item.filePath) {
         void vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(item.filePath));

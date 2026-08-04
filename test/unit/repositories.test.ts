@@ -14,6 +14,7 @@ import {
 } from '../../src/models';
 import {
   ArtifactConflictError,
+  ArtifactResult,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
@@ -26,6 +27,7 @@ import {
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
+  isLoadedArtifact,
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
@@ -35,6 +37,7 @@ import {
   listIntegrationPolicies,
   listRoleMappings,
   listRoles,
+  LoadedArtifact,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
@@ -47,6 +50,16 @@ import {
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
+
+/** Narrows a list of load results to the successfully-loaded ones, failing the test if any didn't load. */
+function expectAllLoaded<T>(items: ArtifactResult<T>[]): LoadedArtifact<T>[] {
+  return items.map((item) => {
+    if (!isLoadedArtifact(item)) {
+      throw new Error(`Expected "${item.filePath}" to load successfully, but got: ${item.error.message}`);
+    }
+    return item;
+  });
+}
 
 function proxyFixture(overrides: Partial<FleetProxy> = {}): FleetProxy {
   return {
@@ -175,7 +188,7 @@ describe('repositories', () => {
       await saveFleetProxy(undefined, proxyFixture({ name: 'Zeta Proxy' }));
       await saveFleetProxy(undefined, proxyFixture({ name: 'Alpha Proxy' }));
 
-      const proxies = await listFleetProxies();
+      const proxies = expectAllLoaded(await listFleetProxies());
       expect(proxies.map((p) => p.data.name)).toEqual(['Alpha Proxy', 'Zeta Proxy']);
     });
 
@@ -289,7 +302,7 @@ describe('repositories', () => {
     it('lists download sources sorted by name', async () => {
       await saveFleetDownloadSource(undefined, downloadSourceFixture({ name: 'Zeta DS' }));
       await saveFleetDownloadSource(undefined, downloadSourceFixture({ name: 'Alpha DS' }));
-      const sources = await listFleetDownloadSources();
+      const sources = expectAllLoaded(await listFleetDownloadSources());
       expect(sources.map((s) => s.data.name)).toEqual(['Alpha DS', 'Zeta DS']);
     });
   });
@@ -309,7 +322,7 @@ describe('repositories', () => {
       await saveFleetAgentPolicy(undefined, agentPolicyFixture({ id: generateId(), name: 'Zeta Policy' }));
       await saveFleetAgentPolicy(undefined, agentPolicyFixture({ id: generateId(), name: 'Alpha Policy' }));
 
-      const policies = await listFleetAgentPolicies();
+      const policies = expectAllLoaded(await listFleetAgentPolicies());
       expect(policies.map((p) => p.data.name)).toEqual(['Alpha Policy', 'Zeta Policy']);
     });
 
@@ -319,7 +332,7 @@ describe('repositories', () => {
         recursive: true,
       });
 
-      const policies = await listFleetAgentPolicies();
+      const policies = expectAllLoaded(await listFleetAgentPolicies());
       expect(policies.map((p) => p.data.name)).toEqual(['CMT Default']);
     });
 
@@ -362,7 +375,7 @@ describe('repositories', () => {
 
       const renamedPath = await saveFleetAgentPolicy(originalPath, { ...original, name: 'CMT Renamed' });
 
-      const integrations = await listIntegrationPolicies(renamedPath);
+      const integrations = expectAllLoaded(await listIntegrationPolicies(renamedPath));
       expect(integrations).toHaveLength(1);
       expect(integrations[0].data.name).toBe('system-cmt-default');
     });
@@ -440,7 +453,7 @@ describe('repositories', () => {
       await saveIntegrationPolicy(undefined, agentPolicyPath, integrationPolicyFixture(agentPolicy.id, { name: 'z-int' }));
       await saveIntegrationPolicy(undefined, agentPolicyPath, integrationPolicyFixture(agentPolicy.id, { name: 'a-int' }));
 
-      const integrations = await listIntegrationPolicies(agentPolicyPath);
+      const integrations = expectAllLoaded(await listIntegrationPolicies(agentPolicyPath));
       expect(integrations.map((i) => i.data.name)).toEqual(['a-int', 'z-int']);
     });
 
@@ -501,7 +514,7 @@ describe('repositories', () => {
       await saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'zeta-policy' }));
       await saveIlmPolicy(undefined, ilmPolicyFixture({ name: 'alpha-policy' }));
 
-      const policies = await listIlmPolicies();
+      const policies = expectAllLoaded(await listIlmPolicies());
       expect(policies.map((p) => p.data.name)).toEqual(['alpha-policy', 'zeta-policy']);
     });
 
@@ -547,7 +560,7 @@ describe('repositories', () => {
       const withMeta = ilmPolicyFixture({ policy: { phases: { delete: { actions: { delete: {} } } }, _meta: { owner: 'platform-team' } } });
       const filePath = await saveIlmPolicy(undefined, withMeta);
 
-      const [saved] = await listIlmPolicies();
+      const [saved] = expectAllLoaded(await listIlmPolicies());
       expect(saved.filePath).toBe(filePath);
       expect(saved.data.policy._meta).toEqual({ owner: 'platform-team' });
     });
@@ -579,7 +592,7 @@ describe('repositories', () => {
       await saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'zeta-pipeline' }));
       await saveIngestPipeline(undefined, ingestPipelineFixture({ name: 'alpha-pipeline' }));
 
-      const pipelines = await listIngestPipelines();
+      const pipelines = expectAllLoaded(await listIngestPipelines());
       expect(pipelines.map((p) => p.data.name)).toEqual(['alpha-pipeline', 'zeta-pipeline']);
     });
 
@@ -631,7 +644,7 @@ describe('repositories', () => {
       });
       const filePath = await saveIngestPipeline(undefined, full);
 
-      const [saved] = await listIngestPipelines();
+      const [saved] = expectAllLoaded(await listIngestPipelines());
       expect(saved.filePath).toBe(filePath);
       expect(saved.data).toEqual(full);
     });
@@ -658,7 +671,7 @@ describe('repositories', () => {
       await saveIndexTemplate(undefined, indexTemplateFixture({ name: 'zeta-template' }));
       await saveIndexTemplate(undefined, indexTemplateFixture({ name: 'alpha-template' }));
 
-      const templates = await listIndexTemplates();
+      const templates = expectAllLoaded(await listIndexTemplates());
       expect(templates.map((t) => t.data.name)).toEqual(['alpha-template', 'zeta-template']);
     });
 
@@ -718,7 +731,7 @@ describe('repositories', () => {
       });
       const filePath = await saveIndexTemplate(undefined, full);
 
-      const [saved] = await listIndexTemplates();
+      const [saved] = expectAllLoaded(await listIndexTemplates());
       expect(saved.filePath).toBe(filePath);
       expect(saved.data).toEqual(full);
     });
@@ -743,7 +756,7 @@ describe('repositories', () => {
       await saveRole(undefined, roleFixture({ name: 'zeta-role' }));
       await saveRole(undefined, roleFixture({ name: 'alpha-role' }));
 
-      const roles = await listRoles();
+      const roles = expectAllLoaded(await listRoles());
       expect(roles.map((r) => r.data.name)).toEqual(['alpha-role', 'zeta-role']);
     });
 
@@ -799,7 +812,7 @@ describe('repositories', () => {
       });
       const filePath = await saveRole(undefined, full);
 
-      const [saved] = await listRoles();
+      const [saved] = expectAllLoaded(await listRoles());
       expect(saved.filePath).toBe(filePath);
       expect(saved.data).toEqual(full);
     });
@@ -824,7 +837,7 @@ describe('repositories', () => {
       await saveRoleMapping(undefined, roleMappingFixture({ name: 'zeta-mapping' }));
       await saveRoleMapping(undefined, roleMappingFixture({ name: 'alpha-mapping' }));
 
-      const mappings = await listRoleMappings();
+      const mappings = expectAllLoaded(await listRoleMappings());
       expect(mappings.map((m) => m.data.name)).toEqual(['alpha-mapping', 'zeta-mapping']);
     });
 
@@ -869,7 +882,7 @@ describe('repositories', () => {
       });
       const filePath = await saveRoleMapping(undefined, full);
 
-      const [saved] = await listRoleMappings();
+      const [saved] = expectAllLoaded(await listRoleMappings());
       expect(saved.filePath).toBe(filePath);
       expect(saved.data).toEqual(full);
     });

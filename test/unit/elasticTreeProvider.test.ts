@@ -499,15 +499,68 @@ describe('ElasticTreeProvider', () => {
     });
   });
 
-  describe('errors other than NoWorkspaceError', () => {
-    it('propagate instead of being swallowed as the "open a folder" message', async () => {
-      // A corrupt json file makes readJsonFile throw a SyntaxError, not NoWorkspaceError.
+  describe('a file that fails to load', () => {
+    it('is shown as an error placeholder instead of failing the whole list', async () => {
+      // A corrupt json file makes readJsonFile throw a SyntaxError.
+      const proxiesDir = path.join(workspaceRoot, 'Elastic_Source', 'Fleet_Proxies');
+      fs.mkdirSync(proxiesDir, { recursive: true });
+      fs.writeFileSync(path.join(proxiesDir, 'corrupt.json'), '{ not valid json');
+      await saveFleetProxy(undefined, {
+        id: generateId(),
+        name: 'WNP Proxy',
+        url: 'http://proxy.internal:3128',
+        certificate_authorities: '',
+        certificates: '',
+        certificate_key: '',
+        is_preconfigured: false,
+      });
+
+      const [proxiesCategory] = await provider.getChildren();
+      const items = await provider.getChildren(proxiesCategory);
+
+      expect(items.map((i) => i.contextValue)).toEqual(expect.arrayContaining(['proxy', 'load-error']));
+      const errorItem = items.find((i) => i.contextValue === 'load-error')!;
+      expect(errorItem.label).toBe('corrupt.json');
+      expect((errorItem.iconPath as { id: string }).id).toBe('error');
+    });
+
+    it('shows a minimal error message when the placeholder is selected', async () => {
       const proxiesDir = path.join(workspaceRoot, 'Elastic_Source', 'Fleet_Proxies');
       fs.mkdirSync(proxiesDir, { recursive: true });
       fs.writeFileSync(path.join(proxiesDir, 'corrupt.json'), '{ not valid json');
 
       const [proxiesCategory] = await provider.getChildren();
-      await expect(provider.getChildren(proxiesCategory)).rejects.toBeInstanceOf(SyntaxError);
+      const [errorItem] = await provider.getChildren(proxiesCategory);
+
+      const command = errorItem.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.showArtifactLoadError');
+      expect(typeof command.arguments[0]).toBe('string');
+    });
+
+    it('also flags a syntactically-valid json file that is missing "name" (e.g. a Role)', async () => {
+      const rolesDir = path.join(workspaceRoot, 'Elastic_Source', 'Roles');
+      fs.mkdirSync(rolesDir, { recursive: true });
+      fs.writeFileSync(path.join(rolesDir, 'errorRole.json'), JSON.stringify({ BadlyFormatted: 'Json' }));
+
+      const children = await provider.getChildren();
+      const rolesCategory = children.find((c) => c.contextValue === 'category-roles')!;
+      const [item] = await provider.getChildren(rolesCategory);
+
+      expect(item.contextValue).toBe('load-error');
+      expect(item.tooltip).toMatch(/missing a valid "name"/);
+    });
+
+    it('also flags a Role Mapping file whose value is not a JSON object', async () => {
+      const roleMappingsDir = path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings');
+      fs.mkdirSync(roleMappingsDir, { recursive: true });
+      fs.writeFileSync(path.join(roleMappingsDir, 'errorfile.json'), JSON.stringify({ BadlyFormatted: 'Json' }));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-rolemappings')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.contextValue).toBe('load-error');
+      expect(item.tooltip).toMatch(/must be a JSON object/);
     });
   });
 

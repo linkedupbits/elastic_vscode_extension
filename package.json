@@ -124,6 +124,11 @@
         "title": "Reveal in File Explorer",
         "icon": "$(go-to-file)",
         "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.showArtifactLoadError",
+        "title": "Show Load Error",
+        "category": "Elastic Source"
       }
     ],
     "menus": {
@@ -194,6 +199,10 @@
       "commandPalette": [
         {
           "command": "elasticSource.openArtifact",
+          "when": "false"
+        },
+        {
+          "command": "elasticSource.showArtifactLoadError",
           "when": "false"
         }
       ]

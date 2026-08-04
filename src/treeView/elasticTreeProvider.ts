@@ -1,6 +1,9 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { NoWorkspaceError } from '../config';
 import {
+  FailedArtifact,
+  isLoadedArtifact,
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
@@ -115,142 +118,183 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     }
   }
 
+  /** Placeholder shown in place of an artifact whose file failed to load (e.g. invalid JSON). */
+  private buildErrorItem({ filePath, error }: FailedArtifact): ElasticTreeItem {
+    return new ElasticTreeItem(path.basename(filePath), vscode.TreeItemCollapsibleState.None, {
+      contextValue: 'load-error',
+      iconPath: new vscode.ThemeIcon('error'),
+      description: 'Failed to load',
+      tooltip: error.message,
+      filePath,
+      command: {
+        command: 'elasticSource.showArtifactLoadError',
+        title: 'Show Load Error',
+        arguments: [error.message],
+      },
+    });
+  }
+
   private async getProxyItems(): Promise<ElasticTreeItem[]> {
     const proxies = await listFleetProxies();
-    return proxies.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'proxy',
-          iconPath: new vscode.ThemeIcon('server-process'),
-          description: data.url,
-          filePath,
-          artifactType: 'proxy',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'proxy', filePath }],
-          },
-        })
-    );
+    return proxies.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'proxy',
+        iconPath: new vscode.ThemeIcon('server-process'),
+        description: data.url,
+        filePath,
+        artifactType: 'proxy',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'proxy', filePath }],
+        },
+      });
+    });
   }
 
   private async getDownloadSourceItems(): Promise<ElasticTreeItem[]> {
     const sources = await listFleetDownloadSources();
-    return sources.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'downloadsource',
-          iconPath: new vscode.ThemeIcon('cloud'),
-          description: data.is_default ? 'default' : data.host,
-          filePath,
-          artifactType: 'downloadsource',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'downloadsource', filePath }],
-          },
-        })
-    );
+    return sources.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'downloadsource',
+        iconPath: new vscode.ThemeIcon('cloud'),
+        description: data.is_default ? 'default' : data.host,
+        filePath,
+        artifactType: 'downloadsource',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'downloadsource', filePath }],
+        },
+      });
+    });
   }
 
   private async getAgentPolicyItems(): Promise<ElasticTreeItem[]> {
     const policies = await listFleetAgentPolicies();
-    return policies.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.Collapsed, {
-          contextValue: 'agentpolicy',
-          iconPath: new vscode.ThemeIcon('checklist'),
-          description: data.namespace,
-          filePath,
-          artifactType: 'agentpolicy',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'agentpolicy', filePath }],
-          },
-        })
-    );
+    return policies.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.Collapsed, {
+        contextValue: 'agentpolicy',
+        iconPath: new vscode.ThemeIcon('checklist'),
+        description: data.namespace,
+        filePath,
+        artifactType: 'agentpolicy',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'agentpolicy', filePath }],
+        },
+      });
+    });
   }
 
   private async getIlmPolicyItems(): Promise<ElasticTreeItem[]> {
     const policies = await listIlmPolicies();
-    return policies.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'ilmpolicy',
-          iconPath: new vscode.ThemeIcon('history'),
-          description: Object.keys(data.policy?.phases ?? {}).join(', '),
-          filePath,
-          artifactType: 'ilmpolicy',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'ilmpolicy', filePath }],
-          },
-        })
-    );
+    return policies.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'ilmpolicy',
+        iconPath: new vscode.ThemeIcon('history'),
+        description: Object.keys(data.policy?.phases ?? {}).join(', '),
+        filePath,
+        artifactType: 'ilmpolicy',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'ilmpolicy', filePath }],
+        },
+      });
+    });
   }
 
   private async getIngestPipelineItems(): Promise<ElasticTreeItem[]> {
     const pipelines = await listIngestPipelines();
-    return pipelines.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'ingestpipeline',
-          iconPath: new vscode.ThemeIcon('gear'),
-          description: data.description || `${(data.processors ?? []).length} processor(s)`,
-          filePath,
-          artifactType: 'ingestpipeline',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'ingestpipeline', filePath }],
-          },
-        })
-    );
+    return pipelines.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'ingestpipeline',
+        iconPath: new vscode.ThemeIcon('gear'),
+        description: data.description || `${(data.processors ?? []).length} processor(s)`,
+        filePath,
+        artifactType: 'ingestpipeline',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'ingestpipeline', filePath }],
+        },
+      });
+    });
   }
 
   private async getIndexTemplateItems(): Promise<ElasticTreeItem[]> {
     const templates = await listIndexTemplates();
-    return templates.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'indextemplate',
-          iconPath: new vscode.ThemeIcon('layers'),
-          description: (data.index_patterns ?? []).join(', '),
-          filePath,
-          artifactType: 'indextemplate',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'indextemplate', filePath }],
-          },
-        })
-    );
+    return templates.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'indextemplate',
+        iconPath: new vscode.ThemeIcon('layers'),
+        description: (data.index_patterns ?? []).join(', '),
+        filePath,
+        artifactType: 'indextemplate',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'indextemplate', filePath }],
+        },
+      });
+    });
   }
 
   private async getRoleItems(): Promise<ElasticTreeItem[]> {
     const roles = await listRoles();
-    return roles.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'role',
-          iconPath: new vscode.ThemeIcon('key'),
-          description: data.description || (data.cluster ?? []).join(', '),
-          filePath,
-          artifactType: 'role',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'role', filePath }],
-          },
-        })
-    );
+    return roles.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'role',
+        iconPath: new vscode.ThemeIcon('key'),
+        description: data.description || (data.cluster ?? []).join(', '),
+        filePath,
+        artifactType: 'role',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'role', filePath }],
+        },
+      });
+    });
   }
 
   private async getRoleMappingItems(): Promise<ElasticTreeItem[]> {
     const roleMappings = await listRoleMappings();
-    return roleMappings.map(({ filePath, data }) => {
+    return roleMappings.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
       const summary = (data.roles ?? []).join(', ') || `${(data.role_templates ?? []).length} template(s)`;
       return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
         contextValue: 'rolemapping',
@@ -269,20 +313,23 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
 
   private async getIntegrationPolicyItems(agentPolicyFilePath: string): Promise<ElasticTreeItem[]> {
     const integrations = await listIntegrationPolicies(agentPolicyFilePath);
-    return integrations.map(
-      ({ filePath, data }) =>
-        new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
-          contextValue: 'integrationpolicy',
-          iconPath: new vscode.ThemeIcon('plug'),
-          description: data.package?.title,
-          filePath,
-          artifactType: 'integrationpolicy',
-          command: {
-            command: 'elasticSource.openArtifact',
-            title: 'Open',
-            arguments: [{ artifactType: 'integrationpolicy', filePath }],
-          },
-        })
-    );
+    return integrations.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'integrationpolicy',
+        iconPath: new vscode.ThemeIcon('plug'),
+        description: data.package?.title,
+        filePath,
+        artifactType: 'integrationpolicy',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'integrationpolicy', filePath }],
+        },
+      });
+    });
   }
 }
