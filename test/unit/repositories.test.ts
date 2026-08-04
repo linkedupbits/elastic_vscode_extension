@@ -11,6 +11,7 @@ import {
   IntegrationPolicy,
   RoleDefinition,
   RoleMappingDefinition,
+  SpaceDefinition,
 } from '../../src/models';
 import {
   ArtifactConflictError,
@@ -24,6 +25,7 @@ import {
   deleteIntegrationPolicy,
   deleteRole,
   deleteRoleMapping,
+  deleteSpace,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
@@ -37,6 +39,7 @@ import {
   listIntegrationPolicies,
   listRoleMappings,
   listRoles,
+  listSpaces,
   LoadedArtifact,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
@@ -47,6 +50,7 @@ import {
   saveIntegrationPolicy,
   saveRole,
   saveRoleMapping,
+  saveSpace,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
@@ -143,6 +147,14 @@ function roleMappingFixture(overrides: Partial<RoleMappingDefinition> = {}): Rol
     name: 'cmt_ldap_admins',
     roles: ['cmt_read_only'],
     rules: { field: { username: '*' } },
+    ...overrides,
+  };
+}
+
+function spaceFixture(overrides: Partial<SpaceDefinition> = {}): SpaceDefinition {
+  return {
+    id: 'marketing',
+    name: 'Marketing',
     ...overrides,
   };
 }
@@ -890,6 +902,78 @@ describe('repositories', () => {
     it('deletes a role mapping file', async () => {
       const filePath = await saveRoleMapping(undefined, roleMappingFixture());
       await deleteRoleMapping(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Spaces ----------
+
+  describe('Spaces', () => {
+    it('saves a new space as <id>.json', async () => {
+      const filePath = await saveSpace(undefined, spaceFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Spaces', 'marketing.json'));
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved spaces sorted by name', async () => {
+      await saveSpace(undefined, spaceFixture({ id: 'zeta', name: 'Zeta Space' }));
+      await saveSpace(undefined, spaceFixture({ id: 'alpha', name: 'Alpha Space' }));
+
+      const spaces = expectAllLoaded(await listSpaces());
+      expect(spaces.map((s) => s.data.name)).toEqual(['Alpha Space', 'Zeta Space']);
+    });
+
+    it('returns [] when the Spaces folder does not exist yet', async () => {
+      expect(await listSpaces()).toEqual([]);
+    });
+
+    it('renames the file when an existing space is saved under a new id', async () => {
+      const original = spaceFixture();
+      const originalPath = await saveSpace(undefined, original);
+
+      const renamedPath = await saveSpace(originalPath, { ...original, id: 'renamed-space' });
+
+      expect(renamedPath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Spaces', 'renamed-space.json'));
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a space without changing its id overwrites the same file (no duplicate)', async () => {
+      const original = spaceFixture();
+      const originalPath = await saveSpace(undefined, original);
+
+      const resavedPath = await saveSpace(originalPath, { ...original, description: 'Updated' });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listSpaces()).length).toBe(1);
+    });
+
+    it('rejects saving a space whose id collides with a different existing space', async () => {
+      await saveSpace(undefined, spaceFixture({ id: 'taken-id' }));
+
+      await expect(saveSpace(undefined, spaceFixture({ id: 'taken-id' }))).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+    });
+
+    it('persists optional description/color/initials/imageUrl/disabledFeatures fields', async () => {
+      const full = spaceFixture({
+        description: 'This is the Marketing space.',
+        color: '#aabbcc',
+        initials: 'MK',
+        imageUrl: 'data:image/png;base64,abc123',
+        disabledFeatures: ['discover', 'dashboard'],
+      });
+      const filePath = await saveSpace(undefined, full);
+
+      const [saved] = expectAllLoaded(await listSpaces());
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a space file', async () => {
+      const filePath = await saveSpace(undefined, spaceFixture());
+      await deleteSpace(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

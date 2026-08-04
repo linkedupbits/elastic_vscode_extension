@@ -25,7 +25,7 @@
         "elasticSource.rootFolder": {
           "type": "string",
           "default": "Elastic_Source",
-          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines, Index_Templates, Roles and Role_Mappings."
+          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines, Index_Templates, Roles, Role_Mappings and Spaces."
         }
       }
     },
@@ -109,6 +109,12 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.newSpace",
+        "title": "New Space",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.openArtifact",
         "title": "Open",
         "category": "Elastic Source"
@@ -186,13 +192,18 @@
           "group": "inline"
         },
         {
+          "command": "elasticSource.newSpace",
+          "when": "view == elasticSourceExplorer && viewItem == category-spaces",
+          "group": "inline"
+        },
+        {
           "command": "elasticSource.deleteArtifact",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space)",
           "group": "inline@2"
         },
         {
           "command": "elasticSource.revealInExplorer",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space)",
           "group": "7_modification"
         }
       ],

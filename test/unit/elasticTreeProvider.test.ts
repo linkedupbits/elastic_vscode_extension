@@ -11,6 +11,7 @@ import {
   saveIntegrationPolicy,
   saveRole,
   saveRoleMapping,
+  saveSpace,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -49,6 +50,7 @@ describe('ElasticTreeProvider', () => {
         'category-indextemplates',
         'category-roles',
         'category-rolemappings',
+        'category-spaces',
       ]);
     });
 
@@ -71,6 +73,7 @@ describe('ElasticTreeProvider', () => {
         'category-indextemplates',
         'category-roles',
         'category-rolemappings',
+        'category-spaces',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
@@ -81,6 +84,7 @@ describe('ElasticTreeProvider', () => {
         'Index Templates',
         'Roles',
         'Role Mappings',
+        'Spaces',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -489,6 +493,30 @@ describe('ElasticTreeProvider', () => {
       const [item] = await provider.getChildren(category);
 
       expect(item.description).toBe('0 template(s)');
+    });
+  });
+
+  describe('Spaces category', () => {
+    it('is empty when no spaces exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-spaces')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the space id as description', async () => {
+      await saveSpace(undefined, { id: 'marketing', name: 'Marketing' });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-spaces')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('Marketing');
+      expect(item.contextValue).toBe('space');
+      expect(item.artifactType).toBe('space');
+      expect(item.description).toBe('marketing');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'space', filePath: item.filePath });
     });
   });
 

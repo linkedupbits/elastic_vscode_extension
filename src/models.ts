@@ -218,3 +218,23 @@ export interface RoleMappingDefinition {
  * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-get-role-mapping).
  */
 export type RoleMappingFile = Record<string, Omit<RoleMappingDefinition, 'name'>>;
+
+/**
+ * Body shape of the Kibana Create Space API
+ * (https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-spaces-space).
+ * Maps directly onto the real API body - there's no wrapper key. Unlike most artifact types in
+ * this project, both `id` and `name` are genuinely part of the body (Kibana spaces don't take
+ * their id from the URL path on create) - `id` is the space's URL-safe identifier while `name`
+ * is its display label and (per this project's convention) drives the saved file name.
+ * `disabledFeatures` is left as `string[]` since the set of registered Kibana feature ids is
+ * plugin-defined and open-ended, so it isn't practical to curate as a fixed list here.
+ */
+export interface SpaceDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  initials?: string;
+  imageUrl?: string;
+  disabledFeatures?: string[];
+}

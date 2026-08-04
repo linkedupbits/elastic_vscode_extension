@@ -9,7 +9,8 @@ export type ArtifactType =
   | 'ingestpipeline'
   | 'indextemplate'
   | 'role'
-  | 'rolemapping';
+  | 'rolemapping'
+  | 'space';
 
 export class ElasticTreeItem extends vscode.TreeItem {
   constructor(

@@ -8,6 +8,7 @@ import {
   getIngestPipelinesDir,
   getRoleMappingsDir,
   getRolesDir,
+  getSpacesDir,
 } from './config';
 import {
   deleteFile,
@@ -34,6 +35,7 @@ import {
   RoleFile,
   RoleMappingDefinition,
   RoleMappingFile,
+  SpaceDefinition,
 } from './models';
 
 export interface LoadedArtifact<T> {
@@ -482,5 +484,36 @@ export async function saveRoleMapping(
 }
 
 export async function deleteRoleMapping(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Spaces ----------
+// Each lives as a *.json file named after its own `id` attribute (its URL-safe identifier,
+// not its display `name`).
+
+export async function listSpaces(): Promise<ArtifactResult<SpaceDefinition>[]> {
+  const files = await listJsonFiles(getSpacesDir());
+  return loadArtifacts(files, (filePath) => readJsonFile<SpaceDefinition>(filePath));
+}
+
+/**
+ * Creates or updates a Space. If the id changed on an existing space, the json file is
+ * renamed to match.
+ */
+export async function saveSpace(existingFilePath: string | undefined, data: SpaceDefinition): Promise<string> {
+  const targetFile = path.join(getSpacesDir(), `${data.id}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Space with id "${data.id}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteSpace(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

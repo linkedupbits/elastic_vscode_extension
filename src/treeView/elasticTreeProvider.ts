@@ -13,6 +13,7 @@ import {
   listIntegrationPolicies,
   listRoleMappings,
   listRoles,
+  listSpaces,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
 
@@ -57,6 +58,11 @@ const CATEGORIES = [
     label: 'Role Mappings',
     icon: 'link',
   },
+  {
+    id: 'category-spaces',
+    label: 'Spaces',
+    icon: 'symbol-namespace',
+  },
 ] as const;
 
 export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeItem> {
@@ -100,6 +106,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getRoleItems();
         case 'category-rolemappings':
           return await this.getRoleMappingItems();
+        case 'category-spaces':
+          return await this.getSpaceItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -306,6 +314,28 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           command: 'elasticSource.openArtifact',
           title: 'Open',
           arguments: [{ artifactType: 'rolemapping', filePath }],
+        },
+      });
+    });
+  }
+
+  private async getSpaceItems(): Promise<ElasticTreeItem[]> {
+    const spaces = await listSpaces();
+    return spaces.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'space',
+        iconPath: new vscode.ThemeIcon('symbol-namespace'),
+        description: data.id,
+        filePath,
+        artifactType: 'space',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'space', filePath }],
         },
       });
     });

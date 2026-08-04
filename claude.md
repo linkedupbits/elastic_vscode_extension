@@ -302,3 +302,22 @@ The structure of the json matches the response body of the [Get Role Mapping API
 * At least one of **Roles** or **Role Templates** must be provided before saving, since a mapping that grants nothing has no effect.
 * **Rules** (`rules`) is a required JSON object - Elasticsearch's rule tree is a genuinely recursive/open-ended boolean expression (`field`, `except`, `all`, `any`), much like a Query DSL object, so unlike the rest of this shape it isn't practical to curate as structured fields and is left as a JSON editor.
 * **Metadata** (`metadata`) remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema (the same rationale as `_meta`/Role's `metadata` elsewhere in this project).
+
+`/Elastic_Source/Spaces/` - this folder contains a set of json files, each of which defines a Kibana space. Each space is defined in a json file named the same as the space's `id`, eg `/Elastic_Source/Spaces/marketing.json`.
+
+The structure of the json follows the request body of the [Create Space API](https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-spaces-space) directly (there's no wrapper key). Unlike most other artifact types in this project, both `id` and `name` are genuinely part of the body - Kibana spaces don't take their id from the URL path on create - `id` being the space's URL-safe identifier (and, per this project's convention, what drives the saved file name) and `name` its display label:
+```json
+{
+  "id": "marketing",
+  "name": "Marketing",
+  "description": "This is the Marketing space.",
+  "color": "#aabbcc",
+  "initials": "MK",
+  "disabledFeatures": ["discover"]
+}
+```
+* The file name must be the same as the `id` attribute (not `name`).
+* **ID** is a required free-text field validated client-side against Kibana's allowed charset (lowercase letters, digits, underscores and hyphens only), since it's used directly in Kibana URLs and as this space's file name.
+* **Name** is a required free-text field for the space's display label in Kibana; unlike every other artifact type in this project, it doesn't drive the file name.
+* **Description**, **Color**, **Initials** and **Avatar Image URL** are all optional free-text fields; **Color** and **Initials** are validated client-side (a `#rrggbb` hex value, and at most 2 characters, respectively) to match Kibana's own constraints.
+* **Disabled Features** (`disabledFeatures`) is an optional newline-separated list of Kibana feature ids, mirroring the stringArray convention used elsewhere in this project, since the set of registered feature ids is plugin-defined and open-ended.

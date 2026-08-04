@@ -10,6 +10,7 @@ import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorP
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { RoleEditorPanel } from './editors/roleEditorPanel';
 import { RoleMappingEditorPanel } from './editors/roleMappingEditorPanel';
+import { SpaceEditorPanel } from './editors/spaceEditorPanel';
 import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './integrations/registry';
 import { ArtifactType, ElasticTreeItem } from './treeView/elasticTreeItem';
 import { ElasticTreeProvider } from './treeView/elasticTreeProvider';
@@ -23,6 +24,7 @@ import {
   deleteIntegrationPolicy,
   deleteRole,
   deleteRoleMapping,
+  deleteSpace,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
 import { IntegrationPolicy } from './models';
@@ -108,6 +110,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('elasticSource.newSpace', () => {
+      try {
+        SpaceEditorPanel.openNew(context.extensionUri, refresh);
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
       async (args: { artifactType: ArtifactType; filePath: string }) => {
@@ -135,6 +145,9 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           case 'rolemapping':
             RoleMappingEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
+            break;
+          case 'space':
+            SpaceEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
@@ -201,6 +214,9 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'rolemapping':
           await deleteRoleMapping(item.filePath);
           break;
+        case 'space':
+          await deleteSpace(item.filePath);
+          break;
       }
       refresh();
     }),
@@ -228,7 +244,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const watcherGlob =
-    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines,Index_Templates,Roles,Role_Mappings}/**/*.json';
+    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines,Index_Templates,Roles,Role_Mappings,Spaces}/**/*.json';
   const watcher = vscode.workspace.createFileSystemWatcher(watcherGlob);
   watcher.onDidCreate(() => refresh());
   watcher.onDidChange(() => refresh());
