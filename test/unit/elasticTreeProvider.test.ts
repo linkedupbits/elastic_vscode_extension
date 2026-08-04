@@ -324,7 +324,7 @@ describe('ElasticTreeProvider', () => {
     it('treats a legacy/malformed file with no processors key as having 0 processors', async () => {
       const ingestDir = path.join(workspaceRoot, 'Elastic_Source', 'Ingest_Pipelines');
       fs.mkdirSync(ingestDir, { recursive: true });
-      fs.writeFileSync(path.join(ingestDir, 'legacy-pipeline.json'), JSON.stringify({ name: 'legacy-pipeline' }));
+      fs.writeFileSync(path.join(ingestDir, 'legacy-pipeline.json'), JSON.stringify({}));
 
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-ingestpipelines')!;

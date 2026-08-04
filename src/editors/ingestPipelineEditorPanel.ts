@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readJsonFile, validateArtifactName } from '../fileSystem';
+import { validateArtifactName } from '../fileSystem';
 import {
   buildProcessorsJson,
   INGEST_PROCESSORS,
@@ -8,7 +8,7 @@ import {
   parseProcessorsFromRaw,
 } from '../ingest/ingestProcessorTemplate';
 import { IngestPipelineDefinition } from '../models';
-import { saveIngestPipeline } from '../repositories';
+import { loadIngestPipeline, saveIngestPipeline } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
 interface IngestPipelinePayload {
@@ -118,7 +118,7 @@ export class IngestPipelineEditorPanel extends ArtifactPanelBase {
 
   protected async loadInitialPayload(): Promise<IngestPipelinePayload> {
     if (this.filePath) {
-      const item = await readJsonFile<IngestPipelineDefinition>(this.filePath);
+      const item = await loadIngestPipeline(this.filePath);
       return {
         isNew: false,
         item: {

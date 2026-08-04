@@ -27,6 +27,7 @@ import {
   IlmPolicyDefinition,
   IndexTemplateDefinition,
   IngestPipelineDefinition,
+  IngestPipelineFile,
   IntegrationPolicy,
   NamedRef,
   RoleDefinition,
@@ -337,11 +338,17 @@ export async function deleteIlmPolicy(filePath: string): Promise<void> {
 }
 
 // ---------- Ingest Pipelines ----------
-// Each lives as a *.json file named after its own `name` attribute.
+// Each lives as a *.json file named after its own name; unlike other artifact types, the name
+// isn't stored in the body at all (see `IngestPipelineFile`) - it's derived from the file name.
+
+export async function loadIngestPipeline(filePath: string): Promise<IngestPipelineDefinition> {
+  const body = await readJsonFile<IngestPipelineFile>(filePath);
+  return { name: path.basename(filePath, '.json'), ...body };
+}
 
 export async function listIngestPipelines(): Promise<ArtifactResult<IngestPipelineDefinition>[]> {
   const files = await listJsonFiles(getIngestPipelinesDir());
-  return loadArtifacts(files, (filePath) => readJsonFile<IngestPipelineDefinition>(filePath));
+  return loadArtifacts(files, loadIngestPipeline);
 }
 
 /**
@@ -358,7 +365,8 @@ export async function saveIngestPipeline(
     throw new ArtifactConflictError(`An Ingest Pipeline named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, data);
+  const { name, ...body } = data;
+  await writeJsonFile(targetFile, body);
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }

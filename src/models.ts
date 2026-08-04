@@ -103,11 +103,12 @@ export interface IlmPolicyDefinition {
 /**
  * Body shape of the Elasticsearch Put Pipeline API
  * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline).
- * Unlike the ILM policy body, this maps directly onto the real API body - there's no wrapper
- * key - except for `name`, which isn't part of the body (it's the URL path segment) but is
- * kept here since it drives the saved file name. `processors`/`on_failure` are left free-form
- * (each entry is `{ <processor_type>: { ...config } }`) since Elasticsearch supports dozens of
- * processor types with very different configs.
+ * Maps directly onto the real API body - there's no wrapper key, and unlike most other
+ * artifact types in this project, `name` isn't persisted in the file at all: it's derived from
+ * the file name (see `IngestPipelineFile`), since the API itself takes the pipeline name from
+ * the URL path rather than the body. `processors`/`on_failure` are left free-form (each entry
+ * is `{ <processor_type>: { ...config } }`) since Elasticsearch supports dozens of processor
+ * types with very different configs.
  */
 export interface IngestPipelineDefinition {
   name: string;
@@ -118,6 +119,9 @@ export interface IngestPipelineDefinition {
   _meta?: Record<string, unknown>;
   deprecated?: boolean;
 }
+
+/** On-disk shape of an Ingest Pipeline file: the same as the real API body, with no `name` field. */
+export type IngestPipelineFile = Omit<IngestPipelineDefinition, 'name'>;
 
 export interface IndexTemplateDataStream {
   hidden?: boolean;

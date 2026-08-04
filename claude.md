@@ -155,12 +155,11 @@ The structure of the json follows the request body of the [ILM Put Lifecycle API
   * `dataset_name`, `integration_name`, `namespace` - free text, all required for any row that exists.
   * Rows can be added/removed freely; the array may be empty. Any row that's present must have every field filled in before saving.
 
-`/Elastic_Source/Ingest_Pipelines/` - this folder contains a set of json files, each of which defines an Elasticsearch ingest pipeline. Each pipeline is defined in a json file named the same as the pipeline's `name` attribute, eg `/Elastic_Source/Ingest_Pipelines/logs-emailengine_wildfly@custom.json`.
+`/Elastic_Source/Ingest_Pipelines/` - this folder contains a set of json files, each of which defines an Elasticsearch ingest pipeline. Each pipeline is defined in a json file named the same as the pipeline's name, eg `/Elastic_Source/Ingest_Pipelines/logs-emailengine_wildfly@custom.json`.
 
-The structure of the json follows the request body of the [Put Pipeline API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline) directly (there's no wrapper key, unlike the ILM policy body), with `name` added at the top level since the API takes the pipeline name/id from the URL path rather than the body:
+The structure of the json follows the request body of the [Put Pipeline API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline) directly - there's no wrapper key, and no `name` field either: unlike every other artifact type in this project, the pipeline's name is *only* ever the file name (matching how the real API itself takes the name from the URL path, not the body) and is never persisted inside the json:
 ```json
 {
-  "name": "logs-emailengine_wildfly@custom",
   "description": "Adds a few custom fields before the managed pipeline runs.",
   "processors": [
     {
@@ -184,7 +183,7 @@ The structure of the json follows the request body of the [Put Pipeline API](htt
   }
 }
 ```
-* The file name must be the same as the `name` attribute.
+* Renaming a pipeline renames its file; there is no `name` key to keep in sync.
 * `processors` is required (at least one) and `on_failure` is optional; both are edited as an ordered, repeatable list of structured processor rows (add/remove freely) rather than raw JSON, mirroring the inputs/streams/vars template pattern used for Integration Policies (see `src/ingest/ingestProcessorTemplate.ts`). Each row has:
   * A **Processor Type** dropdown covering a curated set of the most commonly used processor types: `set`, `remove`, `rename`, `append`, `convert`, `gsub`, `grok`, `dissect`, `date`, `json`, `script`, `pipeline`, `csv`, `kv`, `lowercase`, `uppercase`, `trim`, `split`, `geoip`, `user_agent`, `fail`, `drop` - each with its own structured fields (required ones enforced before saving).
   * A final **Custom / Other...** option for any processor type not in that curated list (e.g. `enrich`, plugin-provided processors, or future processor types), which instead exposes a free-text **Processor Type** name plus a JSON **Configuration** object for that type's parameters - this is also what any pipeline containing an uncurated processor type falls back to when reopened, so no data is lost.
