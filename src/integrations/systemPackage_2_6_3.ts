@@ -7,26 +7,32 @@ const FSSTAT_PROCESSORS =
   '- drop_event.when.regexp:\n    system.fsstat.mount_point: ^/(sys|cgroup|proc|dev|etc|host|lib|snap)($|/)\n';
 
 const LOGFILE_CONDITION =
-  '${host.os_version} != "12 (bookworm)" and (${host.os_platform} != "amzn" or ${host.os_version} != "2023") and (${host.os_platform} != "sles" and startsWith(${host.os_version}, "15") == false)';
+  '${host.os_version} != "12 (bookworm)" and ${host.os_version} != "13 (trixie)" and (${host.os_platform} != "amzn" or ${host.os_version} != "2023") and (${host.os_platform} != "sles" and ${host.os_version} != "15 SP1" and ${host.os_version} != "15 SP2" and ${host.os_version} != "15 SP3" and ${host.os_version} != "15 SP4" and ${host.os_version} != "15 SP5" and ${host.os_version} != "15 SP6" and ${host.os_version} != "15 SP7")';
 const JOURNALD_CONDITION =
-  '${host.os_version} == "12 (bookworm)" or (${host.os_platform} == "amzn" and ${host.os_version} == "2023") or (${host.os_platform} == "sles" and startsWith(${host.os_version}, "15") == true)';
+  '${host.os_version} == "12 (bookworm)" or ${host.os_version} == "13 (trixie)" or (${host.os_platform} == "amzn" and ${host.os_version} == "2023") or (${host.os_platform} == "sles" and (${host.os_version} == "15 SP1" or ${host.os_version} == "15 SP2" or ${host.os_version} == "15 SP3" or ${host.os_version} == "15 SP4" or ${host.os_version} == "15 SP5" or ${host.os_version} == "15 SP6" or ${host.os_version} == "15 SP7"))';
 
 /**
- * Structural template for the Elastic `system` integration package at the older package
- * version 2.3.2, registered alongside `systemPackageTemplate_2_22_1` (2.22.1) so policies still
- * pinned to 2.3.2 get a structured editor too. Derived from the published package registry
- * snapshot: https://epr.elastic.co/package/system/2.3.2/ (manifest.yml + each
- * data_stream manifest.yml). Notable differences from 2.22.1: no `ntp` metrics stream
- * (added in a later release) and simpler logfile/journald OS-match conditions (no Debian 13
- * "trixie" / multiple SLES service-pack branches yet).
+ * Structural template for the Elastic `system` integration package at package version
+ * 2.6.3 (a release between the 2.3.2 and 2.22.1 siblings also registered in this repo),
+ * derived from the published package registry snapshot:
+ * https://epr.elastic.co/epr/system/system-2.6.3.zip (manifest.yml + each
+ * data_stream/*\/manifest.yml). Notable differences from the siblings:
+ *   - No `ntp` metrics stream, same as 2.3.2 (added later, present in 2.22.1).
+ *   - The logfile/journald OS-match condition is an intermediate shape: it adds Debian 13
+ *     "trixie" and per-service-pack SLES branches ("15 SP1".."15 SP7") that 2.3.2's simpler
+ *     `startsWith` condition lacks, but it doesn't yet have 2.22.1's "16.0" branch or the
+ *     duplicated dash-style SLES tokens ("15-SP1" etc. alongside "15 SP1").
+ *   - The winlog `language` var is mapped to `'string'` here (the manifest declares
+ *     `type: text`, and its description gives non-numeric examples like `0x0409`) rather than
+ *     the `'number'` type the 2.3.2/2.22.1 templates use for the same field.
  * `requiresRoot` mirrors `agent.privileges.root: true` (auth, syslog, diskio only); the
  * policy-level `requires_root` is computed from currently-enabled streams, see
  * `computeRequiresRoot`.
  */
-export const systemPackageTemplate_2_3_2: PackageTemplate = {
+export const systemPackageTemplate_2_6_3: PackageTemplate = {
   name: 'system',
   title: 'System',
-  version: '2.3.2',
+  version: '2.6.3',
   inputs: [
     {
       id: 'system-logfile',
@@ -136,6 +142,9 @@ export const systemPackageTemplate_2_3_2: PackageTemplate = {
     {
       id: 'system-winlog',
       label: 'Windows Event Log',
+      // Manifest doesn't declare `enabled: false` on any of these streams, but as with the
+      // 2.3.2/2.22.1 siblings, Fleet's real product UI defaults Windows Event Log collection
+      // off (these streams only apply to Windows hosts), so we mirror that here too.
       defaultEnabled: false,
       streams: [
         {
@@ -152,7 +161,7 @@ export const systemPackageTemplate_2_3_2: PackageTemplate = {
             },
             { key: 'event_id', label: 'Event ID', type: 'string', default: '' },
             { key: 'ignore_older', label: 'Ignore Older', type: 'string', default: '72h' },
-            { key: 'language', label: 'Language', type: 'number', default: 0 },
+            { key: 'language', label: 'Language', type: 'string', default: 0 },
             { key: 'tags', label: 'Tags', type: 'stringArray', default: [] },
             { key: 'processors', label: 'Processors', type: 'multiline', default: '' },
             { key: 'custom', label: 'Custom', type: 'multiline', default: WINLOG_CUSTOM },
@@ -172,7 +181,7 @@ export const systemPackageTemplate_2_3_2: PackageTemplate = {
             },
             { key: 'event_id', label: 'Event ID', type: 'string', default: '' },
             { key: 'ignore_older', label: 'Ignore Older', type: 'string', default: '72h' },
-            { key: 'language', label: 'Language', type: 'number', default: 0 },
+            { key: 'language', label: 'Language', type: 'string', default: 0 },
             { key: 'tags', label: 'Tags', type: 'stringArray', default: [] },
             { key: 'processors', label: 'Processors', type: 'multiline', default: '' },
             { key: 'custom', label: 'Custom', type: 'multiline', default: WINLOG_CUSTOM },
@@ -192,7 +201,7 @@ export const systemPackageTemplate_2_3_2: PackageTemplate = {
             },
             { key: 'event_id', label: 'Event ID', type: 'string', default: '' },
             { key: 'ignore_older', label: 'Ignore Older', type: 'string', default: '72h' },
-            { key: 'language', label: 'Language', type: 'number', default: 0 },
+            { key: 'language', label: 'Language', type: 'string', default: 0 },
             { key: 'tags', label: 'Tags', type: 'stringArray', default: [] },
             { key: 'processors', label: 'Processors', type: 'multiline', default: '' },
             { key: 'custom', label: 'Custom', type: 'multiline', default: WINLOG_CUSTOM },

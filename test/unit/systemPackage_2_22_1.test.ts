@@ -1,9 +1,9 @@
 import { computeRequiresRoot, buildDefaultInputs } from '../../src/integrations/packageTemplate';
-import { systemPackageTemplate } from '../../src/integrations/systemPackage';
+import { systemPackageTemplate_2_22_1 } from '../../src/integrations/systemPackage_2_22_1';
 import { assertTemplateIsWellFormed } from '../helpers/templateInvariants';
 
 function input(id: string) {
-  const found = systemPackageTemplate.inputs.find((i) => i.id === id);
+  const found = systemPackageTemplate_2_22_1.inputs.find((i) => i.id === id);
   if (!found) throw new Error(`no such input: ${id}`);
   return found;
 }
@@ -14,18 +14,18 @@ function stream(inputId: string, streamId: string) {
   return found;
 }
 
-describe('systemPackageTemplate', () => {
+describe('systemPackageTemplate_2_22_1', () => {
   it('is structurally well-formed', () => {
-    assertTemplateIsWellFormed(systemPackageTemplate);
+    assertTemplateIsWellFormed(systemPackageTemplate_2_22_1);
   });
 
   it('is package version 2.22.1, matching the current upstream manifest.yml', () => {
-    expect(systemPackageTemplate.name).toBe('system');
-    expect(systemPackageTemplate.version).toBe('2.22.1');
+    expect(systemPackageTemplate_2_22_1.name).toBe('system');
+    expect(systemPackageTemplate_2_22_1.version).toBe('2.22.1');
   });
 
   it('has the four input types System declares, keyed as <package>-<type>', () => {
-    expect(systemPackageTemplate.inputs.map((i) => i.id).sort()).toEqual([
+    expect(systemPackageTemplate_2_22_1.inputs.map((i) => i.id).sort()).toEqual([
       'system-journald',
       'system-logfile',
       'system-system/metrics',
@@ -120,19 +120,19 @@ describe('systemPackageTemplate', () => {
   });
 
   it('a brand-new System policy computes requires_root=true (auth/syslog enabled by default)', () => {
-    const inputs = buildDefaultInputs(systemPackageTemplate);
-    expect(computeRequiresRoot(systemPackageTemplate, inputs)).toBe(true);
+    const inputs = buildDefaultInputs(systemPackageTemplate_2_22_1);
+    expect(computeRequiresRoot(systemPackageTemplate_2_22_1, inputs)).toBe(true);
   });
 
   it('requires_root computes false once every root-needing stream is disabled', () => {
-    const inputs = buildDefaultInputs(systemPackageTemplate);
+    const inputs = buildDefaultInputs(systemPackageTemplate_2_22_1);
     inputs['system-logfile'].streams['system.auth'].enabled = false;
     inputs['system-logfile'].streams['system.syslog'].enabled = false;
     inputs['system-journald'].streams['system.auth'].enabled = false;
     inputs['system-journald'].streams['system.syslog'].enabled = false;
     inputs['system-system/metrics'].streams['system.diskio'].enabled = false;
 
-    expect(computeRequiresRoot(systemPackageTemplate, inputs)).toBe(false);
+    expect(computeRequiresRoot(systemPackageTemplate_2_22_1, inputs)).toBe(false);
   });
 
   it('the logfile/journald condition defaults are complementary (mutually exclusive OS matches)', () => {

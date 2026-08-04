@@ -1,27 +1,26 @@
 import { PackageTemplate } from './packageTemplate';
 
 /**
- * Structural template for the Elastic `nginx` integration package (package version 3.2.1),
- * derived from the package source of truth on GitHub:
- * https://github.com/elastic/integrations/tree/main/packages/nginx
+ * Structural template for the Elastic `nginx` integration package at the older package
+ * version 2.0.0, registered alongside `nginxPackageTemplate_3_2_1` (3.2.1) so policies still pinned
+ * to 2.0.0 get a structured editor too. Derived from the published package registry snapshot:
+ * https://epr.elastic.co/epr/nginx/nginx-2.0.0.zip
  *   - manifest.yml (policy_templates: input types + input-level vars)
  *   - data_stream/access/manifest.yml, data_stream/error/manifest.yml (logfile streams)
  *   - data_stream/stubstatus/manifest.yml (nginx/metrics stream)
- * Drives both the default values used when creating a new Nginx integration policy, and
- * the structured editor form.
+ * Notable difference from 3.2.1: neither input declares a `condition` var (that OS/env
+ * matching var was added in a later release) — otherwise the access/error/stubstatus streams
+ * are var-for-var identical, including all defaults and required flags.
  */
-export const nginxPackageTemplate_3_2_1: PackageTemplate = {
+export const nginxPackageTemplate_2_0_0: PackageTemplate = {
   name: 'nginx',
   title: 'Nginx',
-  version: '3.2.1',
+  version: '2.0.0',
   inputs: [
     {
       id: 'nginx-logfile',
       label: 'Log File (access / error)',
       defaultEnabled: true,
-      vars: [
-        { key: 'condition', label: 'Condition', type: 'string', default: '' },
-      ],
       streams: [
         {
           id: 'nginx.access',
@@ -85,7 +84,6 @@ export const nginxPackageTemplate_3_2_1: PackageTemplate = {
           default: ['http://127.0.0.1:80'],
           required: true,
         },
-        { key: 'condition', label: 'Condition', type: 'string', default: '' },
       ],
       streams: [
         {

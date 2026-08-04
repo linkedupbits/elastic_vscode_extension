@@ -23,7 +23,7 @@ const JOURNALD_CONDITION =
  * (only auth, syslog and diskio declare it); the policy-level `requires_root` is computed
  * from currently-enabled streams rather than hardcoded, see `computeRequiresRoot`.
  */
-export const systemPackageTemplate: PackageTemplate = {
+export const systemPackageTemplate_2_22_1: PackageTemplate = {
   name: 'system',
   title: 'System',
   version: '2.22.1',

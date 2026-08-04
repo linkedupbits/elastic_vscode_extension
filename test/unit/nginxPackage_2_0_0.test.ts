@@ -1,9 +1,9 @@
 import { computeRequiresRoot, buildDefaultInputs } from '../../src/integrations/packageTemplate';
-import { nginxPackageTemplate_3_2_1 } from '../../src/integrations/nginxPackage_3_2_1';
+import { nginxPackageTemplate_2_0_0 } from '../../src/integrations/nginxPackage_2_0_0';
 import { assertTemplateIsWellFormed } from '../helpers/templateInvariants';
 
 function input(id: string) {
-  const found = nginxPackageTemplate_3_2_1.inputs.find((i) => i.id === id);
+  const found = nginxPackageTemplate_2_0_0.inputs.find((i) => i.id === id);
   if (!found) throw new Error(`no such input: ${id}`);
   return found;
 }
@@ -14,18 +14,19 @@ function stream(inputId: string, streamId: string) {
   return found;
 }
 
-describe('nginxPackageTemplate_3_2_1', () => {
+describe('nginxPackageTemplate_2_0_0', () => {
   it('is structurally well-formed', () => {
-    assertTemplateIsWellFormed(nginxPackageTemplate_3_2_1);
+    assertTemplateIsWellFormed(nginxPackageTemplate_2_0_0);
   });
 
-  it('is package version 3.2.1, matching the current upstream manifest.yml', () => {
-    expect(nginxPackageTemplate_3_2_1.name).toBe('nginx');
-    expect(nginxPackageTemplate_3_2_1.version).toBe('3.2.1');
+  it('is package version 2.0.0, matching the published EPR package snapshot', () => {
+    expect(nginxPackageTemplate_2_0_0.name).toBe('nginx');
+    expect(nginxPackageTemplate_2_0_0.title).toBe('Nginx');
+    expect(nginxPackageTemplate_2_0_0.version).toBe('2.0.0');
   });
 
   it('has the two input types Nginx declares, keyed as <package>-<type>', () => {
-    expect(nginxPackageTemplate_3_2_1.inputs.map((i) => i.id).sort()).toEqual([
+    expect(nginxPackageTemplate_2_0_0.inputs.map((i) => i.id).sort()).toEqual([
       'nginx-logfile',
       'nginx-nginx/metrics',
     ]);
@@ -37,6 +38,11 @@ describe('nginxPackageTemplate_3_2_1', () => {
 
   it('the metrics input covers the stubstatus stream', () => {
     expect(input('nginx-nginx/metrics').streams.map((s) => s.id)).toEqual(['nginx.stubstatus']);
+  });
+
+  it('unlike the newer 3.2.1 template, neither input declares a `condition` var', () => {
+    expect(input('nginx-logfile').vars).toBeUndefined();
+    expect(input('nginx-nginx/metrics').vars?.map((f) => f.key)).toEqual(['hosts']);
   });
 
   it('access/error default paths match the manifest defaults', () => {
@@ -69,18 +75,18 @@ describe('nginxPackageTemplate_3_2_1', () => {
     expect(s.vars.find((f) => f.key === 'tags')?.required).toBe(true);
   });
 
-  it('no stream declares requiresRoot, so a new Nginx policy always computes requires_root=false', () => {
-    for (const i of nginxPackageTemplate_3_2_1.inputs) {
+  it('no stream declares requiresRoot, so a new Nginx 2.0.0 policy always computes requires_root=false', () => {
+    for (const i of nginxPackageTemplate_2_0_0.inputs) {
       for (const s of i.streams) {
         expect(s.requiresRoot).toBeFalsy();
       }
     }
-    const inputs = buildDefaultInputs(nginxPackageTemplate_3_2_1);
-    expect(computeRequiresRoot(nginxPackageTemplate_3_2_1, inputs)).toBe(false);
+    const inputs = buildDefaultInputs(nginxPackageTemplate_2_0_0);
+    expect(computeRequiresRoot(nginxPackageTemplate_2_0_0, inputs)).toBe(false);
   });
 
   it('all streams default to enabled', () => {
-    for (const i of nginxPackageTemplate_3_2_1.inputs) {
+    for (const i of nginxPackageTemplate_2_0_0.inputs) {
       expect(i.defaultEnabled).toBe(true);
       for (const s of i.streams) {
         expect(s.defaultEnabled).toBe(true);
