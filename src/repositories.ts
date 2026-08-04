@@ -1,5 +1,6 @@
 import * as path from 'path';
 import {
+  getAgentPolicyNamePattern,
   getConnectionsDir,
   getFleetAgentPoliciesDir,
   getFleetDownloadSourcesDir,
@@ -21,6 +22,7 @@ import {
   pathExists,
   readJsonFile,
   renameFolder,
+  validateArtifactName,
   writeJsonFile,
 } from './fileSystem';
 import {
@@ -619,4 +621,81 @@ export async function saveConnection(
 
 export async function deleteConnection(filePath: string): Promise<void> {
   await deleteFile(filePath);
+}
+
+// ---------- Live Downloads ----------
+// "Download to Project" turns a live item fetched from a Connection (see
+// connections/kibanaClient.ts) into a local artifact file, the reverse of this project's usual
+// direction. Both functions sanitize away any extra fields the live API response may carry
+// beyond the known shape (e.g. Kibana's own `_reserved` on a built-in Space) before delegating
+// to the normal saveX function, and default to throwing the normal ArtifactConflictError if a
+// local artifact already occupies that name/id - pass `overwrite: true` to replace it instead,
+// once the caller has confirmed that with the user.
+
+/**
+ * Saves a live-fetched Kibana Space as a local Space artifact. Throws `ArtifactConflictError`
+ * if a local Space with this id already exists, unless `overwrite` is true.
+ */
+export async function downloadSpace(data: SpaceDefinition, overwrite = false): Promise<string> {
+  const { id, name, description, color, initials, imageUrl, disabledFeatures } = data;
+  const sanitized: SpaceDefinition = {
+    id,
+    name,
+    ...(description !== undefined ? { description } : {}),
+    ...(color !== undefined ? { color } : {}),
+    ...(initials !== undefined ? { initials } : {}),
+    ...(imageUrl !== undefined ? { imageUrl } : {}),
+    ...(disabledFeatures !== undefined ? { disabledFeatures } : {}),
+  };
+
+  const targetFile = path.join(getSpacesDir(), `${sanitized.id}.json`);
+  return saveSpace(overwrite ? targetFile : undefined, sanitized);
+}
+
+/**
+ * Extracts the portion of a live Fleet Agent Policy's name to use locally, via the configurable
+ * `elasticSource.agentPolicyNamePattern` regex (see `getAgentPolicyNamePattern` in config.ts) -
+ * e.g. its default strips a trailing " | <environment>" suffix so the same policy downloaded
+ * from different environments lands under one consistent local name. Falls back to the full
+ * original name if the pattern is invalid or doesn't match, rather than failing the download.
+ */
+function extractAgentPolicyName(rawName: string): string {
+  try {
+    const match = new RegExp(getAgentPolicyNamePattern()).exec(rawName);
+    return match?.[1]?.trim() || rawName;
+  } catch {
+    return rawName;
+  }
+}
+
+/**
+ * Saves a live-fetched Fleet Agent Policy as a local Fleet Agent Policy artifact, with its name
+ * run through `extractAgentPolicyName` first. Unlike a Space's id, a live policy's name isn't
+ * guaranteed to be safe as a folder/file name (it's free text in Kibana, unlike a Kibana space
+ * id's constrained charset), so the extracted name is validated the same way the local "New
+ * Fleet Agent Policy" form validates one before saving. Throws `ArtifactConflictError` if a
+ * local agent policy with this name already exists, unless `overwrite` is true.
+ */
+export async function downloadAgentPolicy(data: FleetAgentPolicy, overwrite = false): Promise<string> {
+  const name = extractAgentPolicyName(data.name);
+
+  const nameError = validateArtifactName(name);
+  if (nameError) {
+    throw new Error(`Cannot download this agent policy: ${nameError}`);
+  }
+
+  const sanitized: FleetAgentPolicy = {
+    id: data.id,
+    name,
+    description: data.description,
+    monitoring_enabled: data.monitoring_enabled,
+    inactivity_timeout: data.inactivity_timeout,
+    download_source_id: data.download_source_id,
+    schema_version: data.schema_version,
+    namespace: data.namespace,
+    advanced_settings: data.advanced_settings,
+  };
+
+  const targetFile = path.join(getFleetAgentPoliciesDir(), sanitized.name, `${sanitized.name}.json`);
+  return saveFleetAgentPolicy(overwrite ? targetFile : undefined, sanitized);
 }

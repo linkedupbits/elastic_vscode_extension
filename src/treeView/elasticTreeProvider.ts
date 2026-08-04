@@ -253,6 +253,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         contextValue: 'connection-space',
         iconPath: new vscode.ThemeIcon('symbol-namespace'),
         description: space.id,
+        liveSpace: space,
         command: {
           command: 'elasticSource.openLiveSpace',
           title: 'Open',
@@ -268,6 +269,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         contextValue: 'connection-agentpolicy',
         iconPath: new vscode.ThemeIcon('checklist'),
         description: policy.namespace,
+        liveAgentPolicy: policy,
         command: {
           command: 'elasticSource.openLiveAgentPolicy',
           title: 'Open',

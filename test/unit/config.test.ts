@@ -1,5 +1,6 @@
 import * as path from 'path';
 import {
+  getAgentPolicyNamePattern,
   getElasticSourceRoot,
   getFleetAgentPoliciesDir,
   getFleetDownloadSourcesDir,
@@ -42,6 +43,22 @@ describe('config', () => {
       __setWorkspaceFolders('/ws');
       __setConfigValue('rootFolder', '');
       expect(getElasticSourceRoot()).toBe(path.join('/ws', 'Elastic_Source'));
+    });
+  });
+
+  describe('getAgentPolicyNamePattern', () => {
+    it('defaults to a pattern stripping a trailing " | <environment>" suffix', () => {
+      expect(getAgentPolicyNamePattern()).toBe('(.*)\\s\\|\\s.*');
+    });
+
+    it('honors a custom elasticSource.agentPolicyNamePattern setting', () => {
+      __setConfigValue('agentPolicyNamePattern', '^(.*)-env$');
+      expect(getAgentPolicyNamePattern()).toBe('^(.*)-env$');
+    });
+
+    it('does not require a workspace to be open', () => {
+      __resetWorkspace();
+      expect(() => getAgentPolicyNamePattern()).not.toThrow();
     });
   });
 

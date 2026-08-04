@@ -66,3 +66,17 @@ export function getSnapshotPoliciesDir(): string {
 export function getConnectionsDir(): string {
   return path.join(getElasticSourceRoot(), 'Connections');
 }
+
+/**
+ * Matches a live Fleet Agent Policy name up to (but not including) a trailing " | <environment>"
+ * suffix - e.g. "Agent Policy1 | Test" -> group 1 "Agent Policy1". Used by
+ * `downloadAgentPolicy` (repositories.ts) as the default for `elasticSource.agentPolicyNamePattern`.
+ */
+const DEFAULT_AGENT_POLICY_NAME_PATTERN = '(.*)\\s\\|\\s.*';
+
+/** Regex (as a string) applied to a live Fleet Agent Policy's name when downloading it to the project. */
+export function getAgentPolicyNamePattern(): string {
+  return vscode.workspace
+    .getConfiguration('elasticSource')
+    .get<string>('agentPolicyNamePattern', DEFAULT_AGENT_POLICY_NAME_PATTERN);
+}

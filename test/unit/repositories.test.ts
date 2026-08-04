@@ -30,6 +30,8 @@ import {
   deleteRoleMapping,
   deleteSnapshotPolicy,
   deleteSpace,
+  downloadAgentPolicy,
+  downloadSpace,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
@@ -1138,6 +1140,158 @@ describe('repositories', () => {
       const filePath = await saveConnection(undefined, connectionFixture());
       await deleteConnection(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Live Downloads ----------
+
+  describe('downloadSpace', () => {
+    it('saves a live space as a local Space artifact at <id>.json', async () => {
+      const filePath = await downloadSpace(spaceFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Spaces', 'marketing.json'));
+
+      const [saved] = expectAllLoaded(await listSpaces());
+      expect(saved.data).toEqual(spaceFixture());
+    });
+
+    it('strips fields the live Kibana response carries beyond the known Space shape', async () => {
+      const raw = { ...spaceFixture(), _reserved: true } as unknown as SpaceDefinition;
+
+      const filePath = await downloadSpace(raw);
+
+      const onDisk = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(onDisk).not.toHaveProperty('_reserved');
+      expect(onDisk).toEqual(spaceFixture());
+    });
+
+    it('carries through optional description/color/initials/imageUrl/disabledFeatures fields', async () => {
+      const full = spaceFixture({
+        description: 'The Marketing space.',
+        color: '#aabbcc',
+        initials: 'MK',
+        imageUrl: 'data:image/png;base64,abc123',
+        disabledFeatures: ['discover'],
+      });
+
+      const filePath = await downloadSpace(full);
+
+      const onDisk = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(onDisk).toEqual(full);
+    });
+
+    it('rejects downloading over an existing local space with the same id unless overwrite is set', async () => {
+      await saveSpace(undefined, spaceFixture({ description: 'Locally authored.' }));
+
+      await expect(downloadSpace(spaceFixture({ description: 'From Kibana.' }))).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+
+      const filePath = await downloadSpace(spaceFixture({ description: 'From Kibana.' }), true);
+      const [saved] = expectAllLoaded(await listSpaces());
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data.description).toBe('From Kibana.');
+    });
+  });
+
+  describe('downloadAgentPolicy', () => {
+    it('saves a live agent policy as a local Fleet Agent Policy artifact', async () => {
+      const policy = agentPolicyFixture({ id: 'policy-1' });
+      const filePath = await downloadAgentPolicy(policy);
+
+      expect(filePath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Fleet_Agent_Policies', 'CMT Default', 'CMT Default.json')
+      );
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.data).toEqual(policy);
+    });
+
+    it('strips fields the live Fleet API response carries beyond the known shape', async () => {
+      const policy = agentPolicyFixture({ id: 'policy-1' });
+      const raw = { ...policy, status: 'active', revision: 3, package_policies: [] } as unknown as FleetAgentPolicy;
+
+      const filePath = await downloadAgentPolicy(raw);
+
+      const onDisk = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(onDisk).not.toHaveProperty('status');
+      expect(onDisk).not.toHaveProperty('revision');
+      expect(onDisk).not.toHaveProperty('package_policies');
+      expect(onDisk).toEqual(policy);
+    });
+
+    it('rejects a name that is not safe as a folder/file name', async () => {
+      await expect(downloadAgentPolicy(agentPolicyFixture({ name: 'CMT/Default' }))).rejects.toThrow(
+        'Cannot download this agent policy: Name cannot contain \\ / : * ? " < > |'
+      );
+    });
+
+    it('rejects downloading over an existing local agent policy with the same name unless overwrite is set', async () => {
+      await saveFleetAgentPolicy(undefined, agentPolicyFixture({ id: 'local-id', name: 'CMT Default' }));
+
+      await expect(
+        downloadAgentPolicy(agentPolicyFixture({ id: 'remote-id', name: 'CMT Default' }))
+      ).rejects.toBeInstanceOf(ArtifactConflictError);
+
+      const filePath = await downloadAgentPolicy(
+        agentPolicyFixture({ id: 'remote-id', name: 'CMT Default' }),
+        true
+      );
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data.id).toBe('remote-id');
+    });
+
+    it('strips a trailing " | <environment>" suffix from the name using the default pattern', async () => {
+      const policy = agentPolicyFixture({ name: 'Agent Policy1 | Test' });
+
+      const filePath = await downloadAgentPolicy(policy);
+
+      expect(filePath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'Fleet_Agent_Policies', 'Agent Policy1', 'Agent Policy1.json')
+      );
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.data.name).toBe('Agent Policy1');
+      expect(saved.data.id).toBe(policy.id);
+    });
+
+    it('uses the full live name unchanged when the pattern does not match', async () => {
+      const policy = agentPolicyFixture({ name: 'Agent Policy1' });
+
+      await downloadAgentPolicy(policy);
+
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.data.name).toBe('Agent Policy1');
+    });
+
+    it('honors a custom elasticSource.agentPolicyNamePattern setting', async () => {
+      vscodeMock.__setConfigValue('agentPolicyNamePattern', '^(.*)-env$');
+      const policy = agentPolicyFixture({ name: 'Agent Policy1-env' });
+
+      await downloadAgentPolicy(policy);
+
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.data.name).toBe('Agent Policy1');
+    });
+
+    it('falls back to the full live name when the configured pattern is invalid regex', async () => {
+      vscodeMock.__setConfigValue('agentPolicyNamePattern', '(unterminated');
+      const policy = agentPolicyFixture({ name: 'Agent Policy1 Test' });
+
+      await downloadAgentPolicy(policy);
+
+      const [saved] = expectAllLoaded(await listFleetAgentPolicies());
+      expect(saved.data.name).toBe('Agent Policy1 Test');
+    });
+
+    it('surfaces a name-validation error when a broken pattern fails to strip an unsafe "|" from the name', async () => {
+      // The fallback (unmatched/invalid-regex) path uses the live name as-is, so a name that
+      // still contains "|" - exactly what the default pattern exists to strip - fails
+      // validateArtifactName rather than silently producing a broken folder name.
+      vscodeMock.__setConfigValue('agentPolicyNamePattern', '(unterminated');
+      const policy = agentPolicyFixture({ name: 'Agent Policy1 | Test' });
+
+      await expect(downloadAgentPolicy(policy)).rejects.toThrow(
+        'Cannot download this agent policy: Name cannot contain \\ / : * ? " < > |'
+      );
     });
   });
 });

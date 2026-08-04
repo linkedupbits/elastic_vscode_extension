@@ -26,6 +26,11 @@
           "type": "string",
           "default": "Elastic_Source",
           "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines, Index_Templates, Roles, Role_Mappings, Spaces, SnapshotPolicies and Connections."
+        },
+        "elasticSource.agentPolicyNamePattern": {
+          "type": "string",
+          "default": "(.*)\\s\\|\\s.*",
+          "description": "Regular expression applied to a live Fleet Agent Policy's name when using \"Download to Project\". If the pattern matches, capture group 1 is used as the downloaded artifact's name instead of the full live name - the default strips a trailing \" | <environment>\" suffix, e.g. \"Agent Policy1 | Test\" downloads as \"Agent Policy1\". If the pattern doesn't match (or is invalid), the full live name is used unchanged."
         }
       }
     },
@@ -142,6 +147,18 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.downloadLiveSpace",
+        "title": "Download to Project",
+        "icon": "$(cloud-download)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.downloadLiveAgentPolicy",
+        "title": "Download to Project",
+        "icon": "$(cloud-download)",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.deleteArtifact",
         "title": "Delete",
         "icon": "$(trash)",
@@ -226,6 +243,16 @@
         {
           "command": "elasticSource.newConnection",
           "when": "view == elasticSourceExplorer && viewItem == category-connections",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.downloadLiveSpace",
+          "when": "view == elasticSourceExplorer && viewItem == connection-space",
+          "group": "inline"
+        },
+        {
+          "command": "elasticSource.downloadLiveAgentPolicy",
+          "when": "view == elasticSourceExplorer && viewItem == connection-agentpolicy",
           "group": "inline"
         },
         {

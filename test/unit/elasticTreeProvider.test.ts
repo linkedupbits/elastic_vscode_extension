@@ -632,6 +632,7 @@ describe('ElasticTreeProvider', () => {
       expect(spaceItems[0].contextValue).toBe('connection-space');
       expect(spaceItems[0].description).toBe('default');
       expect(spaceItems[0].collapsibleState).toBe(0);
+      expect(spaceItems[0].liveSpace).toEqual(spaces[0]);
       const command = spaceItems[0].command as unknown as { command: string; arguments: unknown[] };
       expect(command.command).toBe('elasticSource.openLiveSpace');
       expect(command.arguments[0]).toEqual({ connectionName: 'Staging', space: spaces[0] });
@@ -688,6 +689,7 @@ describe('ElasticTreeProvider', () => {
       expect(agentPolicyItems[0].contextValue).toBe('connection-agentpolicy');
       expect(agentPolicyItems[0].description).toBe('default');
       expect(agentPolicyItems[0].collapsibleState).toBe(0);
+      expect(agentPolicyItems[0].liveAgentPolicy).toEqual(policies[0]);
       const command = agentPolicyItems[0].command as unknown as { command: string; arguments: unknown[] };
       expect(command.command).toBe('elasticSource.openLiveAgentPolicy');
       expect(command.arguments[0]).toEqual({ connectionName: 'Staging', policy: policies[0] });

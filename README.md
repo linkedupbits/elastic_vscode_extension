@@ -67,6 +67,11 @@ neither is saved locally:
 - **Fleet Agent Policies**, via Kibana's
   [Get Agent Policies](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-agent-policies) API.
 
+Each live Space or Fleet Agent Policy has a **Download to Project** action that saves it as a
+normal local artifact under `Spaces/`/`Fleet_Agent_Policies/` - the one place data flows from a
+live deployment back into the project instead of the other way around. If a local artifact with
+that id/name already exists, you'll be asked to confirm before it's overwritten.
+
 See [`claude.md`](claude.md) for the full field-by-field breakdown of every artifact type,
 including which fields are curated into structured controls vs. left as JSON escape hatches
 and why.
@@ -96,6 +101,7 @@ installing `nvm`/Node and the Yeoman VS Code extension generator.
 | Setting | Default | Description |
 | --- | --- | --- |
 | `elasticSource.rootFolder` | `Elastic_Source` | Path, relative to the workspace root, of the project folder containing all artifact subfolders. |
+| `elasticSource.agentPolicyNamePattern` | `(.*)\s\|\s.*` | Regex applied to a live Fleet Agent Policy's name when using **Download to Project** - capture group 1 becomes the downloaded artifact's name. The default strips a trailing `\| <environment>` suffix, e.g. `Agent Policy1 \| Test` downloads as `Agent Policy1`. If the pattern doesn't match, the full live name is used unchanged. |
 
 ## Development
 

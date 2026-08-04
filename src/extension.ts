@@ -20,6 +20,7 @@ import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './int
 import { ArtifactType, ElasticTreeItem } from './treeView/elasticTreeItem';
 import { ElasticTreeProvider } from './treeView/elasticTreeProvider';
 import {
+  ArtifactConflictError,
   deleteConnection,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
@@ -32,6 +33,8 @@ import {
   deleteRoleMapping,
   deleteSnapshotPolicy,
   deleteSpace,
+  downloadAgentPolicy,
+  downloadSpace,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
 import { FleetAgentPolicy, IntegrationPolicy, SpaceDefinition } from './models';
@@ -42,6 +45,33 @@ function reportIfNoWorkspace(err: unknown): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Runs a "download to project" attempt; if it fails because a local artifact already occupies
+ * that name/id, asks the user to confirm before retrying with `overwrite`. Returns the saved
+ * file path, or undefined if the user declined to overwrite.
+ */
+async function downloadWithOverwriteConfirm(
+  attempt: () => Promise<string>,
+  retryWithOverwrite: () => Promise<string>
+): Promise<string | undefined> {
+  try {
+    return await attempt();
+  } catch (err) {
+    if (!(err instanceof ArtifactConflictError)) {
+      throw err;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `${err.message} Overwrite it with the downloaded version?`,
+      { modal: true },
+      'Overwrite'
+    );
+    if (confirmed !== 'Overwrite') {
+      return undefined;
+    }
+    return await retryWithOverwrite();
+  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -201,6 +231,44 @@ export function activate(context: vscode.ExtensionContext): void {
         LiveAgentPolicyViewPanel.open(context.extensionUri, args.connectionName, args.policy);
       }
     ),
+
+    vscode.commands.registerCommand('elasticSource.downloadLiveSpace', async (item: ElasticTreeItem) => {
+      if (!item.liveSpace) {
+        return;
+      }
+      const space = item.liveSpace;
+      try {
+        const filePath = await downloadWithOverwriteConfirm(
+          () => downloadSpace(space),
+          () => downloadSpace(space, true)
+        );
+        if (filePath) {
+          refresh();
+          void vscode.window.showInformationMessage(`Downloaded Space "${space.name}" to the project.`);
+        }
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
+    vscode.commands.registerCommand('elasticSource.downloadLiveAgentPolicy', async (item: ElasticTreeItem) => {
+      if (!item.liveAgentPolicy) {
+        return;
+      }
+      const policy = item.liveAgentPolicy;
+      try {
+        const filePath = await downloadWithOverwriteConfirm(
+          () => downloadAgentPolicy(policy),
+          () => downloadAgentPolicy(policy, true)
+        );
+        if (filePath) {
+          refresh();
+          void vscode.window.showInformationMessage(`Downloaded Fleet Agent Policy "${policy.name}" to the project.`);
+        }
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
 
     vscode.commands.registerCommand('elasticSource.newIntegrationPolicy', async (item: ElasticTreeItem) => {
       if (!item.filePath) {
