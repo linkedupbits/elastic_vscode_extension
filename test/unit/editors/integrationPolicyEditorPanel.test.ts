@@ -256,3 +256,98 @@ describe('IntegrationPolicyEditorPanel', () => {
     });
   });
 });
+
+describe('IntegrationPolicyEditorPanel with no matching template (fallback JSON mode)', () => {
+  let workspaceRoot: string;
+  let agentPolicyId: string;
+  let agentPolicyFilePath: string;
+  let integrationPath: string;
+
+  const unimplementedPackage = { name: 'unimplemented', title: 'Unimplemented', version: '9.9.9', requires_root: false };
+
+  beforeEach(async () => {
+    workspaceRoot = makeTempDir();
+    vscodeMock.__setWorkspaceFolders(workspaceRoot);
+    vscodeMock.__resetWebviewPanels();
+    agentPolicyId = generateId();
+    agentPolicyFilePath = await saveFleetAgentPolicy(undefined, {
+      id: agentPolicyId,
+      name: 'CMT Default',
+      description: '',
+      monitoring_enabled: [],
+      inactivity_timeout: 0,
+      download_source_id: '',
+      schema_version: '1.0.0',
+      namespace: 'default',
+      advanced_settings: {},
+    });
+    integrationPath = await saveIntegrationPolicy(undefined, agentPolicyFilePath, {
+      name: 'unimplemented-instance',
+      namespace: 'ns',
+      description: 'desc',
+      package: unimplementedPackage,
+      policy_id: agentPolicyId,
+      policy_ids: [agentPolicyId],
+      inputs: { 'some-input': { enabled: true, streams: {} } },
+      output_id: null,
+      vars: {},
+    });
+  });
+
+  afterEach(() => {
+    vscodeMock.__resetWorkspace();
+    removeTempDir(workspaceRoot);
+  });
+
+  it('sends an undefined template and the raw, unmerged item to the webview', async () => {
+    IntegrationPolicyEditorPanel.openExisting(extensionUri, () => undefined, integrationPath, undefined);
+    const payload = (await sendReady()) as { isNew: boolean; item: IntegrationPolicy; template: unknown };
+
+    expect(payload.isNew).toBe(false);
+    expect(payload.template).toBeUndefined();
+    expect(payload.item.package).toEqual(unimplementedPackage);
+    expect(payload.item.inputs).toEqual({ 'some-input': { enabled: true, streams: {} } });
+  });
+
+  it('saves edited name/namespace/description/inputs while re-deriving policy linkage and preserving the original package as-is', async () => {
+    IntegrationPolicyEditorPanel.openExisting(extensionUri, () => undefined, integrationPath, undefined);
+    await sendReady();
+
+    const message = await sendSave({
+      name: 'renamed-instance',
+      namespace: 'new-ns',
+      description: 'new desc',
+      inputs: { 'some-input': { enabled: false, streams: {} } },
+      policy_id: 'bogus-id-from-webview',
+      policy_ids: ['bogus-id-from-webview'],
+      package: { name: 'spoofed', title: 'Spoofed', version: '1.2.3', requires_root: true },
+      output_id: null,
+      vars: {},
+    });
+
+    expect(message.type).toBe('saved');
+    const data = message.payload as IntegrationPolicy;
+    expect(data.name).toBe('renamed-instance');
+    expect(data.namespace).toBe('new-ns');
+    expect(data.inputs).toEqual({ 'some-input': { enabled: false, streams: {} } });
+    expect(data.policy_id).toBe(agentPolicyId);
+    expect(data.policy_ids).toEqual([agentPolicyId]);
+    // package identity is re-read from disk, not trusted from the webview payload.
+    expect(data.package).toEqual(unimplementedPackage);
+  });
+
+  it('rejects a blank name', async () => {
+    IntegrationPolicyEditorPanel.openExisting(extensionUri, () => undefined, integrationPath, undefined);
+    await sendReady();
+
+    const message = await sendSave({
+      name: '',
+      namespace: '',
+      description: '',
+      inputs: {},
+      output_id: null,
+      vars: {},
+    });
+    expect(message).toEqual({ type: 'error', message: 'Name is required.' });
+  });
+});

@@ -1,0 +1,18 @@
+{
+  "name": "postgres Policy",
+  "namespace": "",
+  "description": "",
+  "package": {
+    "name": "postgresql",
+    "title": "PostgreSQL",
+    "version": "1.28.0",
+    "requires_root": true
+  },
+  "policy_id": "efbf1bb8-a932-48ee-94d9-8ff4a5a72114",
+  "policy_ids": [
+    "efbf1bb8-a932-48ee-94d9-8ff4a5a72114"
+  ],
+  "inputs": {},
+  "output_id": null,
+  "vars": {}
+}

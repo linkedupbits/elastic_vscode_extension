@@ -20,13 +20,20 @@ describe('getIntegrationTemplateChoices', () => {
 });
 
 describe('resolveIntegrationTemplate', () => {
-  it('resolves "system" and "nginx" to their respective templates', () => {
+  it('resolves "system" and "nginx" to their respective templates by name', () => {
     expect(resolveIntegrationTemplate('system')).toBe(systemPackageTemplate);
     expect(resolveIntegrationTemplate('nginx')).toBe(nginxPackageTemplate);
   });
 
-  it('falls back to a registered template for an unknown package name, rather than throwing', () => {
-    const fallback = resolveIntegrationTemplate('does-not-exist');
-    expect(Object.values(integrationPackageTemplates)).toContain(fallback);
+  it('resolves by name and version when the version matches the registered template', () => {
+    expect(resolveIntegrationTemplate('nginx', nginxPackageTemplate.version)).toBe(nginxPackageTemplate);
+  });
+
+  it('returns undefined for an unknown package name, rather than falling back to some other template', () => {
+    expect(resolveIntegrationTemplate('does-not-exist')).toBeUndefined();
+  });
+
+  it('returns undefined when a known package is at a version with no matching template', () => {
+    expect(resolveIntegrationTemplate('nginx', '999.0.0')).toBeUndefined();
   });
 });

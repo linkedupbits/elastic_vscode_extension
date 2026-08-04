@@ -15,7 +15,9 @@ import { ArtifactPanelBase } from './artifactPanelBase';
 interface IntegrationPolicyPayload {
   isNew: boolean;
   item: IntegrationPolicy;
-  template: PackageTemplate;
+  /** `undefined` means no structured editor matches this policy's package name/version — the
+   * webview falls back to a plain JSON editor for the inputs and shows a warning banner. */
+  template: PackageTemplate | undefined;
   agentPolicy: { id: string; name: string };
 }
 
@@ -26,20 +28,20 @@ function agentPolicyFilePathFor(integrationFilePath: string): string {
 }
 
 export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
-  private readonly template: PackageTemplate;
+  private readonly template: PackageTemplate | undefined;
   private readonly agentPolicyFilePath: string;
 
   private constructor(
     extensionUri: vscode.Uri,
     filePath: string | undefined,
     private readonly refresh: () => void,
-    template: PackageTemplate,
+    template: PackageTemplate | undefined,
     agentPolicyFilePath: string
   ) {
     super(
       extensionUri,
       'elasticSource.integrationPolicyEditor',
-      filePath ? 'Integration Policy' : `New ${template.title} Integration`,
+      filePath ? 'Integration Policy' : `New ${template?.title ?? ''} Integration`,
       filePath,
       'integrationPolicyForm.js'
     );
@@ -56,11 +58,15 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
     new IntegrationPolicyEditorPanel(extensionUri, undefined, refresh, template, agentPolicyFilePath);
   }
 
+  /**
+   * `template` is `undefined` when the on-disk package name/version doesn't match any
+   * implemented structured editor — the panel then falls back to a plain JSON editor.
+   */
   static openExisting(
     extensionUri: vscode.Uri,
     refresh: () => void,
     filePath: string,
-    template: PackageTemplate
+    template: PackageTemplate | undefined
   ): void {
     if (ArtifactPanelBase.reveal(filePath)) {
       return;
@@ -70,6 +76,7 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
 
   protected getFormBodyHtml(): string {
     return /* html */ `
+    <div class="banner info" id="fallback-banner"></div>
     <h1 id="title">Integration Policy</h1>
     <p class="subtitle" id="subtitle"></p>
     <form id="form">
@@ -97,6 +104,11 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
         <textarea id="description"></textarea>
       </div>
       <div id="inputs-container"></div>
+      <div class="field" id="field-json-fallback" style="display:none">
+        <label for="json-fallback">Inputs (JSON)</label>
+        <textarea id="json-fallback" rows="20" spellcheck="false"></textarea>
+        <span class="hint">No structured editor is implemented for this integration's type/version — edit the inputs as raw JSON instead.</span>
+      </div>
       <div class="actions">
         <button type="submit" class="primary">Save</button>
         <button type="button" class="secondary" id="cancel">Cancel</button>
@@ -109,22 +121,26 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
 
     if (this.filePath) {
       const raw = await readJsonFile<IntegrationPolicy>(this.filePath);
-      const item: IntegrationPolicy = {
-        ...raw,
-        inputs: mergeInputsWithTemplate(this.template, raw.inputs),
-      };
+      const item: IntegrationPolicy = this.template
+        ? { ...raw, inputs: mergeInputsWithTemplate(this.template, raw.inputs) }
+        : raw;
       return { isNew: false, item, template: this.template, agentPolicy: { id: agentPolicy.id, name: agentPolicy.name } };
     }
 
+    // openNew always supplies a template — there's nothing to fall back from when creating new.
     return {
       isNew: true,
-      item: buildDefaultIntegrationPolicy(this.template, agentPolicy.id),
+      item: buildDefaultIntegrationPolicy(this.template as PackageTemplate, agentPolicy.id),
       template: this.template,
       agentPolicy: { id: agentPolicy.id, name: agentPolicy.name },
     };
   }
 
   protected async handleSave(payload: unknown): Promise<{ filePath: string; data: unknown }> {
+    if (!this.template) {
+      return this.handleSaveFallback(payload);
+    }
+
     const data = payload as IntegrationPolicy;
     const name = (data.name ?? '').trim();
     const nameError = validateArtifactName(name);
@@ -158,6 +174,46 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
       policy_id: agentPolicy.id,
       policy_ids: [agentPolicy.id],
       inputs,
+      output_id: data.output_id ?? null,
+      vars: data.vars ?? {},
+    };
+
+    const filePath = await saveIntegrationPolicy(this.filePath, this.agentPolicyFilePath, toSave);
+    this.panel.title = toSave.name;
+    return { filePath, data: toSave };
+  }
+
+  /**
+   * Saves a policy whose package name/version has no matching structured template. The
+   * webview only lets the user edit name/namespace/description plus `inputs` as raw JSON;
+   * `package` is re-read from disk (never trusted from the webview) since there's no template
+   * to re-derive it from, and this mode only ever applies to an already-existing file.
+   */
+  private async handleSaveFallback(payload: unknown): Promise<{ filePath: string; data: unknown }> {
+    if (!this.filePath) {
+      throw new Error('Cannot save: no structured editor is available to create a new policy of this type.');
+    }
+
+    const data = payload as IntegrationPolicy;
+    const name = (data.name ?? '').trim();
+    const nameError = validateArtifactName(name);
+    if (nameError) {
+      throw new Error(nameError);
+    }
+
+    const [agentPolicy, original] = await Promise.all([
+      readJsonFile<FleetAgentPolicy>(this.agentPolicyFilePath),
+      readJsonFile<IntegrationPolicy>(this.filePath),
+    ]);
+
+    const toSave: IntegrationPolicy = {
+      name,
+      namespace: data.namespace ?? '',
+      description: data.description ?? '',
+      package: original.package,
+      policy_id: agentPolicy.id,
+      policy_ids: [agentPolicy.id],
+      inputs: data.inputs ?? {},
       output_id: data.output_id ?? null,
       vars: data.vars ?? {},
     };

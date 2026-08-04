@@ -210,7 +210,7 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
-            const template = resolveIntegrationTemplate(data.package?.name);
+            const template = resolveIntegrationTemplate(data.package?.name, data.package?.version);
             IntegrationPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath, template);
             break;
           }
@@ -282,6 +282,9 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const template = resolveIntegrationTemplate(selected.id);
+      if (!template) {
+        return;
+      }
       IntegrationPolicyEditorPanel.openNew(context.extensionUri, refresh, item.filePath, template);
     }),
 

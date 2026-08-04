@@ -10,10 +10,14 @@
   const subtitle = document.getElementById('subtitle');
   const inputsContainer = document.getElementById('inputs-container');
   const errorBanner = document.getElementById('error-banner');
+  const fallbackBanner = document.getElementById('fallback-banner');
+  const jsonFallbackFieldWrapper = document.getElementById('field-json-fallback');
+  const jsonFallbackField = document.getElementById('json-fallback');
   const cancelButton = document.getElementById('cancel');
 
   let currentTemplate = null;
   let currentOutputId = null;
+  let currentVars = {};
 
   function slug(value) {
     return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -216,18 +220,37 @@
   }
 
   function populate(payload) {
-    currentTemplate = payload.template;
+    currentTemplate = payload.template || null;
     currentOutputId = payload.item.output_id ?? null;
+    currentVars = payload.item.vars ?? {};
 
-    subtitle.textContent = `Defines the inputs for a ${payload.template.title} integration attached to this agent policy.`;
-    packageDisplay.value = `${payload.template.title} (v${payload.template.version})`;
     agentPolicyDisplay.value = payload.agentPolicy.name;
     nameField.value = payload.item.name;
     namespaceField.value = payload.item.namespace || '';
     descriptionField.value = payload.item.description || '';
 
-    renderTemplate(payload.template);
-    populateValues(payload.template, payload.item);
+    if (currentTemplate) {
+      fallbackBanner.classList.remove('show');
+      fallbackBanner.textContent = '';
+      jsonFallbackFieldWrapper.style.display = 'none';
+      inputsContainer.style.display = '';
+
+      subtitle.textContent = `Defines the inputs for a ${payload.template.title} integration attached to this agent policy.`;
+      packageDisplay.value = `${payload.template.title} (v${payload.template.version})`;
+
+      renderTemplate(payload.template);
+      populateValues(payload.template, payload.item);
+    } else {
+      const pkg = payload.item.package || {};
+      subtitle.textContent = 'Structured editing is not available for this integration; edit the inputs as raw JSON below.';
+      packageDisplay.value = `${pkg.title || pkg.name || 'Unknown'} (v${pkg.version || 'unknown'})`;
+      fallbackBanner.textContent = `No structured editor is implemented for "${pkg.title || pkg.name || 'this integration'}" version ${pkg.version || 'unknown'}. Showing a plain JSON editor for its inputs instead.`;
+      fallbackBanner.classList.add('show');
+      inputsContainer.style.display = 'none';
+      inputsContainer.innerHTML = '';
+      jsonFallbackFieldWrapper.style.display = '';
+      jsonFallbackField.value = JSON.stringify(payload.item.inputs ?? {}, null, 2);
+    }
   }
 
   window.addEventListener('message', (event) => {
@@ -252,15 +275,39 @@
     const name = nameField.value.trim();
     const nameValid = name.length > 0 && !/[\\/:*?"<>|]/.test(name);
     setFieldValid('name', nameValid);
-    if (!nameValid || !currentTemplate) {
+    if (!nameValid) {
       return;
     }
 
-    const inputs = collectInputs(currentTemplate);
-    const firstInvalidId = validateRequired(currentTemplate, inputs);
-    if (firstInvalidId) {
-      showError('Fill in the required fields highlighted below.');
-      document.getElementById(firstInvalidId).scrollIntoView({ block: 'center' });
+    if (currentTemplate) {
+      const inputs = collectInputs(currentTemplate);
+      const firstInvalidId = validateRequired(currentTemplate, inputs);
+      if (firstInvalidId) {
+        showError('Fill in the required fields highlighted below.');
+        document.getElementById(firstInvalidId).scrollIntoView({ block: 'center' });
+        return;
+      }
+
+      vscode.postMessage({
+        type: 'save',
+        payload: {
+          name,
+          namespace: namespaceField.value.trim(),
+          description: descriptionField.value,
+          inputs,
+          output_id: currentOutputId,
+          vars: {},
+        },
+      });
+      return;
+    }
+
+    let inputs;
+    try {
+      inputs = jsonFallbackField.value.trim() ? JSON.parse(jsonFallbackField.value) : {};
+    } catch (e) {
+      showError('Inputs JSON is not valid: ' + e.message);
+      jsonFallbackField.focus();
       return;
     }
 
@@ -272,7 +319,7 @@
         description: descriptionField.value,
         inputs,
         output_id: currentOutputId,
-        vars: {},
+        vars: currentVars,
       },
     });
   });
