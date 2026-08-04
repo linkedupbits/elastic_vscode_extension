@@ -30,7 +30,7 @@
         "elasticSource.agentPolicyNamePattern": {
           "type": "string",
           "default": "(.*)\\s\\|\\s.*",
-          "description": "Regular expression applied to a live Fleet Agent Policy's name when using \"Download to Project\". If the pattern matches, capture group 1 is used as the downloaded artifact's name instead of the full live name - the default strips a trailing \" | <environment>\" suffix, e.g. \"Agent Policy1 | Test\" downloads as \"Agent Policy1\". If the pattern doesn't match (or is invalid), the full live name is used unchanged."
+          "description": "Regular expression applied to a live Fleet Agent Policy's or Integration Policy's name when using \"Download to Project\". If the pattern matches, capture group 1 is used as the downloaded artifact's name instead of the full live name - the default strips a trailing \" | <environment>\" suffix, e.g. \"Agent Policy1 | Test\" downloads as \"Agent Policy1\", and \"system-datatech-datacentral | test\" downloads as \"system-datatech-datacentral\". If the pattern doesn't match (or is invalid), the full live name is used unchanged."
         }
       }
     },
@@ -147,6 +147,11 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.openLiveIntegrationPolicy",
+        "title": "Open Integration Policy",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.downloadLiveSpace",
         "title": "Download to Project",
         "icon": "$(cloud-download)",
@@ -154,6 +159,12 @@
       },
       {
         "command": "elasticSource.downloadLiveAgentPolicy",
+        "title": "Download to Project",
+        "icon": "$(cloud-download)",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.downloadLiveIntegrationPolicy",
         "title": "Download to Project",
         "icon": "$(cloud-download)",
         "category": "Elastic Source"
@@ -256,6 +267,11 @@
           "group": "inline"
         },
         {
+          "command": "elasticSource.downloadLiveIntegrationPolicy",
+          "when": "view == elasticSourceExplorer && viewItem == connection-integrationpolicy",
+          "group": "inline"
+        },
+        {
           "command": "elasticSource.deleteArtifact",
           "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space || viewItem == snapshotpolicy || viewItem == connection)",
           "group": "inline@2"
@@ -277,6 +293,10 @@
         },
         {
           "command": "elasticSource.openLiveAgentPolicy",
+          "when": "false"
+        },
+        {
+          "command": "elasticSource.openLiveIntegrationPolicy",
           "when": "false"
         },
         {

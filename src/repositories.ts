@@ -29,6 +29,7 @@ import {
   ConnectionDefinition,
   FleetAgentPolicy,
   FleetDownloadSource,
+  FleetPackagePolicy,
   FleetProxy,
   IlmPolicyDefinition,
   IndexTemplateDefinition,
@@ -653,13 +654,17 @@ export async function downloadSpace(data: SpaceDefinition, overwrite = false): P
 }
 
 /**
- * Extracts the portion of a live Fleet Agent Policy's name to use locally, via the configurable
- * `elasticSource.agentPolicyNamePattern` regex (see `getAgentPolicyNamePattern` in config.ts) -
- * e.g. its default strips a trailing " | <environment>" suffix so the same policy downloaded
- * from different environments lands under one consistent local name. Falls back to the full
- * original name if the pattern is invalid or doesn't match, rather than failing the download.
+ * Extracts the portion of a live Fleet Agent Policy's (or Integration Policy's) name to use
+ * locally, via the configurable `elasticSource.agentPolicyNamePattern` regex (see
+ * `getAgentPolicyNamePattern` in config.ts) - e.g. its default strips a trailing
+ * " | <environment>" suffix (`"system-datatech-datacentral | test"` → `"system-datatech-datacentral"`)
+ * so the same policy downloaded from different environments lands under one consistent local
+ * name. Falls back to the full original name if the pattern is invalid or doesn't match, rather
+ * than failing the download. Shared by `downloadAgentPolicy` and `downloadIntegrationPolicy`,
+ * despite the setting's agent-policy-specific name, since both kinds of live name carry the same
+ * per-environment suffix in practice.
  */
-function extractAgentPolicyName(rawName: string): string {
+function extractDownloadedArtifactName(rawName: string): string {
   try {
     const match = new RegExp(getAgentPolicyNamePattern()).exec(rawName);
     return match?.[1]?.trim() || rawName;
@@ -670,14 +675,14 @@ function extractAgentPolicyName(rawName: string): string {
 
 /**
  * Saves a live-fetched Fleet Agent Policy as a local Fleet Agent Policy artifact, with its name
- * run through `extractAgentPolicyName` first. Unlike a Space's id, a live policy's name isn't
- * guaranteed to be safe as a folder/file name (it's free text in Kibana, unlike a Kibana space
- * id's constrained charset), so the extracted name is validated the same way the local "New
- * Fleet Agent Policy" form validates one before saving. Throws `ArtifactConflictError` if a
+ * run through `extractDownloadedArtifactName` first. Unlike a Space's id, a live policy's name
+ * isn't guaranteed to be safe as a folder/file name (it's free text in Kibana, unlike a Kibana
+ * space id's constrained charset), so the extracted name is validated the same way the local
+ * "New Fleet Agent Policy" form validates one before saving. Throws `ArtifactConflictError` if a
  * local agent policy with this name already exists, unless `overwrite` is true.
  */
 export async function downloadAgentPolicy(data: FleetAgentPolicy, overwrite = false): Promise<string> {
-  const name = extractAgentPolicyName(data.name);
+  const name = extractDownloadedArtifactName(data.name);
 
   const nameError = validateArtifactName(name);
   if (nameError) {
@@ -698,4 +703,60 @@ export async function downloadAgentPolicy(data: FleetAgentPolicy, overwrite = fa
 
   const targetFile = path.join(getFleetAgentPoliciesDir(), sanitized.name, `${sanitized.name}.json`);
   return saveFleetAgentPolicy(overwrite ? targetFile : undefined, sanitized);
+}
+
+/**
+ * Finds the local Fleet Agent Policy whose downloaded `id` matches a live Fleet agent policy id
+ * (an id is preserved as-is by `downloadAgentPolicy` above). Returns `undefined` if that agent
+ * policy hasn't been downloaded to the project yet - a live integration policy can only be
+ * downloaded once its owning agent policy already has a local folder for its "Integrations"
+ * subfolder to live under.
+ */
+export async function findAgentPolicyFilePathById(agentPolicyId: string): Promise<string | undefined> {
+  const locals = await listFleetAgentPolicies();
+  const match = locals.find(
+    (item): item is LoadedArtifact<FleetAgentPolicy> => isLoadedArtifact(item) && item.data.id === agentPolicyId
+  );
+  return match?.filePath;
+}
+
+/**
+ * Saves a live-fetched Fleet integration (package) policy as a local Integration Policy
+ * artifact, nested under its owning agent policy's own "Integrations" folder (see
+ * `getIntegrationsDir`) - `agentPolicyFilePath` is normally the result of
+ * `findAgentPolicyFilePathById`. Its name is run through `extractDownloadedArtifactName` and
+ * validated the same way `downloadAgentPolicy` handles its own live name, since an integration
+ * policy name carries the same per-environment " | <environment>" suffix in practice (e.g.
+ * `"system-datatech-datacentral | test"` downloads as `"system-datatech-datacentral"`) and,
+ * being free text in Kibana, isn't guaranteed to be safe as a file name either. Throws
+ * `ArtifactConflictError` if a local integration policy with this name already exists there,
+ * unless `overwrite` is true.
+ */
+export async function downloadIntegrationPolicy(
+  agentPolicyFilePath: string,
+  data: FleetPackagePolicy,
+  overwrite = false
+): Promise<string> {
+  const name = extractDownloadedArtifactName(data.name);
+
+  const nameError = validateArtifactName(name);
+  if (nameError) {
+    throw new Error(`Cannot download this integration policy: ${nameError}`);
+  }
+
+  const { namespace, description, package: pkg, policy_id, policy_ids, inputs, output_id, vars } = data;
+  const sanitized: IntegrationPolicy = {
+    name,
+    namespace,
+    description,
+    package: pkg,
+    policy_id,
+    policy_ids,
+    inputs,
+    output_id,
+    vars,
+  };
+
+  const targetFile = path.join(getIntegrationsDir(agentPolicyFilePath), `${sanitized.name}.json`);
+  return saveIntegrationPolicy(overwrite ? targetFile : undefined, agentPolicyFilePath, sanitized);
 }

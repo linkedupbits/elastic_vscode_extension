@@ -10,6 +10,10 @@ import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
 import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { LiveAgentPolicyViewPanel } from './editors/liveAgentPolicyViewPanel';
+import {
+  LIVE_INTEGRATION_POLICY_SCHEME,
+  LiveIntegrationPolicyDocumentProvider,
+} from './editors/liveIntegrationPolicyDocumentProvider';
 import { LiveSpaceViewPanel } from './editors/liveSpaceViewPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { RoleEditorPanel } from './editors/roleEditorPanel';
@@ -34,10 +38,12 @@ import {
   deleteSnapshotPolicy,
   deleteSpace,
   downloadAgentPolicy,
+  downloadIntegrationPolicy,
   downloadSpace,
+  findAgentPolicyFilePathById,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
-import { FleetAgentPolicy, IntegrationPolicy, SpaceDefinition } from './models';
+import { FleetAgentPolicy, FleetPackagePolicy, IntegrationPolicy, SpaceDefinition } from './models';
 
 function reportIfNoWorkspace(err: unknown): boolean {
   if (err instanceof NoWorkspaceError) {
@@ -77,9 +83,12 @@ async function downloadWithOverwriteConfirm(
 export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new ElasticTreeProvider(context.secrets);
   const refresh = () => treeProvider.refresh();
+  const liveIntegrationPolicyDocs = new LiveIntegrationPolicyDocumentProvider();
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('elasticSourceExplorer', treeProvider),
+
+    vscode.workspace.registerTextDocumentContentProvider(LIVE_INTEGRATION_POLICY_SCHEME, liveIntegrationPolicyDocs),
 
     vscode.commands.registerCommand('elasticSource.refresh', () => refresh()),
 
@@ -232,6 +241,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
 
+    vscode.commands.registerCommand(
+      'elasticSource.openLiveIntegrationPolicy',
+      async (args: { connectionName: string; policy: FleetPackagePolicy }) => {
+        const uri = liveIntegrationPolicyDocs.uriFor(args.connectionName, args.policy);
+        await vscode.commands.executeCommand('markdown.showPreview', uri);
+      }
+    ),
+
     vscode.commands.registerCommand('elasticSource.downloadLiveSpace', async (item: ElasticTreeItem) => {
       if (!item.liveSpace) {
         return;
@@ -264,6 +281,32 @@ export function activate(context: vscode.ExtensionContext): void {
         if (filePath) {
           refresh();
           void vscode.window.showInformationMessage(`Downloaded Fleet Agent Policy "${policy.name}" to the project.`);
+        }
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
+    vscode.commands.registerCommand('elasticSource.downloadLiveIntegrationPolicy', async (item: ElasticTreeItem) => {
+      if (!item.liveIntegrationPolicy || !item.liveAgentPolicy) {
+        return;
+      }
+      const policy = item.liveIntegrationPolicy;
+      try {
+        const agentPolicyFilePath = await findAgentPolicyFilePathById(item.liveAgentPolicy.id);
+        if (!agentPolicyFilePath) {
+          void vscode.window.showWarningMessage(
+            `Download the owning Fleet Agent Policy "${item.liveAgentPolicy.name}" to the project first, then download "${policy.name}".`
+          );
+          return;
+        }
+        const filePath = await downloadWithOverwriteConfirm(
+          () => downloadIntegrationPolicy(agentPolicyFilePath, policy),
+          () => downloadIntegrationPolicy(agentPolicyFilePath, policy, true)
+        );
+        if (filePath) {
+          refresh();
+          void vscode.window.showInformationMessage(`Downloaded Integration Policy "${policy.name}" to the project.`);
         }
       } catch (err) {
         if (!reportIfNoWorkspace(err)) throw err;

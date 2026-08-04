@@ -223,7 +223,12 @@ export class EventEmitter<T> {
 // ---------- Uri ----------
 
 export class Uri {
-  private constructor(public readonly fsPath: string) {}
+  private constructor(
+    public readonly fsPath: string,
+    public readonly scheme: string = 'file',
+    public readonly path: string = fsPath,
+    public readonly query: string = ''
+  ) {}
 
   static file(fsPath: string): Uri {
     return new Uri(fsPath);
@@ -231,6 +236,15 @@ export class Uri {
 
   static joinPath(base: { fsPath: string }, ...segments: string[]): Uri {
     return new Uri(path.join(base.fsPath, ...segments));
+  }
+
+  /** Minimal stand-in for a non-`file://` virtual document Uri (see `Uri.parse`/`.from` in the real API). */
+  static from(components: { scheme: string; path?: string; query?: string }): Uri {
+    return new Uri(components.path ?? '', components.scheme, components.path ?? '', components.query ?? '');
+  }
+
+  toString(): string {
+    return `${this.scheme}:${this.path}${this.query ? `?${this.query}` : ''}`;
   }
 }
 

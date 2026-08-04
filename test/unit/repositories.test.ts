@@ -5,6 +5,7 @@ import {
   ConnectionDefinition,
   FleetAgentPolicy,
   FleetDownloadSource,
+  FleetPackagePolicy,
   FleetProxy,
   IlmPolicyDefinition,
   IndexTemplateDefinition,
@@ -31,7 +32,9 @@ import {
   deleteSnapshotPolicy,
   deleteSpace,
   downloadAgentPolicy,
+  downloadIntegrationPolicy,
   downloadSpace,
+  findAgentPolicyFilePathById,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
   getIntegrationsDir,
@@ -201,6 +204,10 @@ function integrationPolicyFixture(agentPolicyId: string, overrides: Partial<Inte
     vars: {},
     ...overrides,
   };
+}
+
+function packagePolicyFixture(agentPolicyId: string, overrides: Partial<FleetPackagePolicy> = {}): FleetPackagePolicy {
+  return { id: generateId(), ...integrationPolicyFixture(agentPolicyId), ...overrides };
 }
 
 describe('repositories', () => {
@@ -1291,6 +1298,109 @@ describe('repositories', () => {
 
       await expect(downloadAgentPolicy(policy)).rejects.toThrow(
         'Cannot download this agent policy: Name cannot contain \\ / : * ? " < > |'
+      );
+    });
+  });
+
+  describe('findAgentPolicyFilePathById', () => {
+    it('finds the local agent policy whose downloaded id matches', async () => {
+      const policy = agentPolicyFixture({ id: 'live-policy-1' });
+      const filePath = await downloadAgentPolicy(policy);
+
+      await expect(findAgentPolicyFilePathById('live-policy-1')).resolves.toBe(filePath);
+    });
+
+    it('returns undefined when no local agent policy has that id', async () => {
+      await downloadAgentPolicy(agentPolicyFixture({ id: 'live-policy-1' }));
+
+      await expect(findAgentPolicyFilePathById('some-other-id')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('downloadIntegrationPolicy', () => {
+    it('saves a live integration policy under its owning agent policy\'s Integrations folder', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1');
+
+      const filePath = await downloadIntegrationPolicy(agentPolicyFilePath, policy);
+
+      expect(filePath).toBe(path.join(getIntegrationsDir(agentPolicyFilePath), 'system-cmt-default.json'));
+      const [saved] = expectAllLoaded(await listIntegrationPolicies(agentPolicyFilePath));
+      expect(saved.data).toEqual(integrationPolicyFixture('policy-1'));
+    });
+
+    it('strips the live id field beyond the known IntegrationPolicy shape', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1');
+
+      const filePath = await downloadIntegrationPolicy(agentPolicyFilePath, policy);
+
+      const onDisk = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(onDisk).not.toHaveProperty('id');
+    });
+
+    it('rejects downloading over an existing local integration policy with the same name unless overwrite is set', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      await saveIntegrationPolicy(undefined, agentPolicyFilePath, integrationPolicyFixture('policy-1'));
+      const policy = packagePolicyFixture('policy-1', { description: 'From Kibana.' });
+
+      await expect(downloadIntegrationPolicy(agentPolicyFilePath, policy)).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+
+      const filePath = await downloadIntegrationPolicy(agentPolicyFilePath, policy, true);
+      const [saved] = expectAllLoaded(await listIntegrationPolicies(agentPolicyFilePath));
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data.description).toBe('From Kibana.');
+    });
+
+    it('strips a trailing " | <environment>" suffix from the name using the default pattern, the same as downloadAgentPolicy', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1', { name: 'system-datatech-datacentral | test' });
+
+      const filePath = await downloadIntegrationPolicy(agentPolicyFilePath, policy);
+
+      expect(filePath).toBe(
+        path.join(getIntegrationsDir(agentPolicyFilePath), 'system-datatech-datacentral.json')
+      );
+      const [saved] = expectAllLoaded(await listIntegrationPolicies(agentPolicyFilePath));
+      expect(saved.data.name).toBe('system-datatech-datacentral');
+    });
+
+    it('uses the full live name unchanged when the pattern does not match', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1', { name: 'system-datatech-datacentral' });
+
+      await downloadIntegrationPolicy(agentPolicyFilePath, policy);
+
+      const [saved] = expectAllLoaded(await listIntegrationPolicies(agentPolicyFilePath));
+      expect(saved.data.name).toBe('system-datatech-datacentral');
+    });
+
+    it('honors a custom elasticSource.agentPolicyNamePattern setting', async () => {
+      vscodeMock.__setConfigValue('agentPolicyNamePattern', '^(.*)-env$');
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1', { name: 'system-datatech-datacentral-env' });
+
+      await downloadIntegrationPolicy(agentPolicyFilePath, policy);
+
+      const [saved] = expectAllLoaded(await listIntegrationPolicies(agentPolicyFilePath));
+      expect(saved.data.name).toBe('system-datatech-datacentral');
+    });
+
+    it('rejects a name that is not safe as a file name', async () => {
+      const agentPolicy = agentPolicyFixture({ id: 'policy-1' });
+      const agentPolicyFilePath = await downloadAgentPolicy(agentPolicy);
+      const policy = packagePolicyFixture('policy-1', { name: 'system/datacentral' });
+
+      await expect(downloadIntegrationPolicy(agentPolicyFilePath, policy)).rejects.toThrow(
+        'Cannot download this integration policy: Name cannot contain \\ / : * ? " < > |'
       );
     });
   });

@@ -319,6 +319,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             contextValue: 'connection-agentpolicy',
             iconPath: new vscode.ThemeIcon('checklist'),
             description: policy.namespace,
+            connectionName: connection.name,
             liveAgentPolicy: policy,
             liveIntegrationPolicies: assigned,
             command: {
@@ -335,13 +336,23 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     }
   }
 
+  /** Integration policies pre-assigned to `element` (a `connection-agentpolicy` node) by `getLiveAgentPolicyItems`; no further fetch is needed here. */
   private getLiveIntegrationPolicyItems(element: ElasticTreeItem): ElasticTreeItem[] {
     const integrationPolicies = element.liveIntegrationPolicies ?? [];
+    const connectionName = element.connectionName;
     return integrationPolicies.map((policy) => {
       return new ElasticTreeItem(policy.name, vscode.TreeItemCollapsibleState.None, {
         contextValue: 'connection-integrationpolicy',
         iconPath: new vscode.ThemeIcon('plug'),
         description: policy.package?.title,
+        connectionName,
+        liveAgentPolicy: element.liveAgentPolicy,
+        liveIntegrationPolicy: policy,
+        command: {
+          command: 'elasticSource.openLiveIntegrationPolicy',
+          title: 'Open',
+          arguments: [{ connectionName, policy }],
+        },
       });
     });
   }

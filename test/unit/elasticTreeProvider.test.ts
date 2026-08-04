@@ -783,7 +783,8 @@ describe('ElasticTreeProvider', () => {
       });
 
       it('fetches integration policies alongside agent policies and assigns matches via policy_id', async () => {
-        mockFetchPackagePolicies.mockResolvedValue([packagePolicyFixture()]);
+        const packagePolicy = packagePolicyFixture();
+        mockFetchPackagePolicies.mockResolvedValue([packagePolicy]);
 
         const [agentPolicyItem] = await expandAgentPolicies();
 
@@ -799,6 +800,12 @@ describe('ElasticTreeProvider', () => {
         expect(integrationItems[0].label).toBe('system-cmt-default');
         expect(integrationItems[0].contextValue).toBe('connection-integrationpolicy');
         expect(integrationItems[0].description).toBe('System');
+        expect(integrationItems[0].connectionName).toBe('Staging');
+        expect(integrationItems[0].liveAgentPolicy).toEqual(agentPolicy);
+        expect(integrationItems[0].liveIntegrationPolicy).toEqual(packagePolicy);
+        const command = integrationItems[0].command as unknown as { command: string; arguments: unknown[] };
+        expect(command.command).toBe('elasticSource.openLiveIntegrationPolicy');
+        expect(command.arguments[0]).toEqual({ connectionName: 'Staging', policy: packagePolicy });
       });
 
       it('assigns an integration policy that references the agent policy only via policy_ids', async () => {
