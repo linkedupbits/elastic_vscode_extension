@@ -95,6 +95,8 @@ Each supported Integration type is described as a structural template (inputs â†
 
 Vars marked `required` in the source package manifest (e.g. Nginx's `paths`, `tags`, `hosts`, `period`, `server_status_path`) must be non-blank before saving, but only while their owning input/stream is enabled - a disabled input or stream is not required to have valid values.
 
+If an existing Integration Policy's `package.name`/`package.version` doesn't match one of the currently implemented templates above (an unrecognized package, or a known package at a version this project hasn't transcribed a template for yet), the editor falls back to a plain JSON editor for `inputs` instead of the structured inputs/streams/vars form, and shows a warning banner at the top of the screen explaining that no structured editor is available for that type/version. **Name**, **Namespace** and **Description** remain regular structured fields in this fallback mode; `package` itself is always re-read from disk and re-saved unchanged, since there's no template to validate or regenerate it from (see `resolveIntegrationTemplate` in `src/integrations/registry.ts` and `src/editors/integrationPolicyEditorPanel.ts`). This fallback only applies to *existing* policies - the "New Integration Policy" flow only ever offers the currently implemented types to choose from.
+
 The `"policy_id"` attribute and values in the array of `"policy_ids"` should be set to be the id of the owning Agent Policy. 
 ```
   "policy_id": "80912b12-6a5f-4bf3-b1c8-9f42667515ed",
