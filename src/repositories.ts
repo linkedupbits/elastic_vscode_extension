@@ -1,5 +1,6 @@
 import * as path from 'path';
 import {
+  getConnectionsDir,
   getFleetAgentPoliciesDir,
   getFleetDownloadSourcesDir,
   getFleetProxiesDir,
@@ -23,6 +24,7 @@ import {
   writeJsonFile,
 } from './fileSystem';
 import {
+  ConnectionDefinition,
   FleetAgentPolicy,
   FleetDownloadSource,
   FleetProxy,
@@ -580,5 +582,41 @@ export async function saveSnapshotPolicy(
 }
 
 export async function deleteSnapshotPolicy(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Connections ----------
+// Each lives as a *.json file named after its own `id` attribute, generated once at creation
+// time (see `generateId` in fileSystem.ts) - unlike most artifact ids, it's never user-entered.
+// Only the non-secret metadata (id, name, cloudId) lives here; the API key lives in
+// SecretStorage (see connections/connectionManager.ts), never on disk.
+
+export async function listConnections(): Promise<ArtifactResult<ConnectionDefinition>[]> {
+  const files = await listJsonFiles(getConnectionsDir());
+  return loadArtifacts(files, (filePath) => readJsonFile<ConnectionDefinition>(filePath));
+}
+
+/**
+ * Creates or updates a Connection's metadata. If the id changed on an existing connection, the
+ * json file is renamed to match.
+ */
+export async function saveConnection(
+  existingFilePath: string | undefined,
+  data: ConnectionDefinition
+): Promise<string> {
+  const targetFile = path.join(getConnectionsDir(), `${data.id}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Connection with id "${data.id}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, data);
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteConnection(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

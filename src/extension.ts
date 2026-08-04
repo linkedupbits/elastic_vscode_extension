@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { NoWorkspaceError } from './config';
+import { deleteApiKey } from './connections/connectionManager';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
 import { ArtifactLoadErrorPanel } from './editors/artifactLoadErrorPanel';
+import { ConnectionEditorPanel } from './editors/connectionEditorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
 import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
 import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
 import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
+import { LiveSpaceViewPanel } from './editors/liveSpaceViewPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { RoleEditorPanel } from './editors/roleEditorPanel';
 import { RoleMappingEditorPanel } from './editors/roleMappingEditorPanel';
@@ -16,6 +19,7 @@ import { getIntegrationTemplateChoices, resolveIntegrationTemplate } from './int
 import { ArtifactType, ElasticTreeItem } from './treeView/elasticTreeItem';
 import { ElasticTreeProvider } from './treeView/elasticTreeProvider';
 import {
+  deleteConnection,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
@@ -29,7 +33,7 @@ import {
   deleteSpace,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
-import { IntegrationPolicy } from './models';
+import { IntegrationPolicy, SpaceDefinition } from './models';
 
 function reportIfNoWorkspace(err: unknown): boolean {
   if (err instanceof NoWorkspaceError) {
@@ -40,7 +44,7 @@ function reportIfNoWorkspace(err: unknown): boolean {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const treeProvider = new ElasticTreeProvider();
+  const treeProvider = new ElasticTreeProvider(context.secrets);
   const refresh = () => treeProvider.refresh();
 
   context.subscriptions.push(
@@ -128,6 +132,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
+    vscode.commands.registerCommand('elasticSource.newConnection', () => {
+      try {
+        ConnectionEditorPanel.openNew(context.extensionUri, context.secrets, refresh);
+      } catch (err) {
+        if (!reportIfNoWorkspace(err)) throw err;
+      }
+    }),
+
     vscode.commands.registerCommand(
       'elasticSource.openArtifact',
       async (args: { artifactType: ArtifactType; filePath: string }) => {
@@ -162,6 +174,9 @@ export function activate(context: vscode.ExtensionContext): void {
           case 'snapshotpolicy':
             SnapshotPolicyEditorPanel.openExisting(context.extensionUri, refresh, args.filePath);
             break;
+          case 'connection':
+            ConnectionEditorPanel.openExisting(context.extensionUri, context.secrets, refresh, args.filePath);
+            break;
           case 'integrationpolicy': {
             const data = await readJsonFile<IntegrationPolicy>(args.filePath);
             const template = resolveIntegrationTemplate(data.package?.name);
@@ -169,6 +184,13 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           }
         }
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      'elasticSource.openLiveSpace',
+      (args: { connectionName: string; space: SpaceDefinition }) => {
+        LiveSpaceViewPanel.open(context.extensionUri, args.connectionName, args.space);
       }
     ),
 
@@ -233,6 +255,12 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'snapshotpolicy':
           await deleteSnapshotPolicy(item.filePath);
           break;
+        case 'connection':
+          await deleteConnection(item.filePath);
+          if (item.connectionId) {
+            await deleteApiKey(context.secrets, item.connectionId);
+          }
+          break;
       }
       refresh();
     }),
@@ -260,7 +288,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   const watcherGlob =
-    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines,Index_Templates,Roles,Role_Mappings,Spaces,SnapshotPolicies}/**/*.json';
+    '**/{Fleet_Proxies,Fleet_Download_Sources,Fleet_Agent_Policies,Index_Lifecycle_Policies,Ingest_Pipelines,Index_Templates,Roles,Role_Mappings,Spaces,SnapshotPolicies,Connections}/**/*.json';
   const watcher = vscode.workspace.createFileSystemWatcher(watcherGlob);
   watcher.onDidCreate(() => refresh());
   watcher.onDidChange(() => refresh());

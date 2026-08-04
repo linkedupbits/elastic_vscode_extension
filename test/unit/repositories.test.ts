@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { generateId } from '../../src/fileSystem';
 import {
+  ConnectionDefinition,
   FleetAgentPolicy,
   FleetDownloadSource,
   FleetProxy,
@@ -17,6 +18,7 @@ import {
 import {
   ArtifactConflictError,
   ArtifactResult,
+  deleteConnection,
   deleteFleetAgentPolicy,
   deleteFleetDownloadSource,
   deleteFleetProxy,
@@ -32,6 +34,7 @@ import {
   getFleetProxyRefs,
   getIntegrationsDir,
   isLoadedArtifact,
+  listConnections,
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
@@ -44,6 +47,7 @@ import {
   listSnapshotPolicies,
   listSpaces,
   LoadedArtifact,
+  saveConnection,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
@@ -159,6 +163,15 @@ function spaceFixture(overrides: Partial<SpaceDefinition> = {}): SpaceDefinition
   return {
     id: 'marketing',
     name: 'Marketing',
+    ...overrides,
+  };
+}
+
+function connectionFixture(overrides: Partial<ConnectionDefinition> = {}): ConnectionDefinition {
+  return {
+    id: 'conn-1',
+    name: 'Staging Deployment',
+    cloudId: 'staging:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyRhYmNkMTIzNCRlZmdoNTY3OA==',
     ...overrides,
   };
 }
@@ -1067,6 +1080,63 @@ describe('repositories', () => {
     it('deletes a snapshot policy file', async () => {
       const filePath = await saveSnapshotPolicy(undefined, snapshotPolicyFixture());
       await deleteSnapshotPolicy(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Connections ----------
+
+  describe('Connections', () => {
+    it('saves a new connection as <id>.json', async () => {
+      const filePath = await saveConnection(undefined, connectionFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Connections', 'conn-1.json'));
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('lists saved connections sorted by name', async () => {
+      await saveConnection(undefined, connectionFixture({ id: 'zeta', name: 'Zeta Deployment' }));
+      await saveConnection(undefined, connectionFixture({ id: 'alpha', name: 'Alpha Deployment' }));
+
+      const connections = expectAllLoaded(await listConnections());
+      expect(connections.map((c) => c.data.name)).toEqual(['Alpha Deployment', 'Zeta Deployment']);
+    });
+
+    it('returns [] when the Connections folder does not exist yet', async () => {
+      expect(await listConnections()).toEqual([]);
+    });
+
+    it('renames the file when an existing connection is saved under a new id', async () => {
+      const original = connectionFixture();
+      const originalPath = await saveConnection(undefined, original);
+
+      const renamedPath = await saveConnection(originalPath, { ...original, id: 'conn-2' });
+
+      expect(renamedPath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'Connections', 'conn-2.json'));
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a connection without changing its id overwrites the same file (no duplicate)', async () => {
+      const original = connectionFixture();
+      const originalPath = await saveConnection(undefined, original);
+
+      const resavedPath = await saveConnection(originalPath, { ...original, name: 'Renamed Deployment' });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listConnections()).length).toBe(1);
+    });
+
+    it('rejects saving a connection whose id collides with a different existing connection', async () => {
+      await saveConnection(undefined, connectionFixture({ id: 'taken-id' }));
+
+      await expect(saveConnection(undefined, connectionFixture({ id: 'taken-id' }))).rejects.toBeInstanceOf(
+        ArtifactConflictError
+      );
+    });
+
+    it('deletes a connection file', async () => {
+      const filePath = await saveConnection(undefined, connectionFixture());
+      await deleteConnection(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

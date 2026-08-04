@@ -348,3 +348,19 @@ The structure of the json follows this project's named-wrapper convention (the s
 * **Policy ID**, **Schedule** and **Repository** are required free-text fields; **Policy ID** is validated client-side as a valid file name, the same rule used for every other file-name-driving field in this project.
 * **Snapshot Name** (`name`) is a required free-text field - the (optionally templated) name given to each snapshot taken by this policy.
 * **Config** (`config`) and **Retention** (`retention`) both remain free-form optional JSON editors, since their own sub-fields (`indices`/`ignore_unavailable`/`include_global_state`/`feature_states`/`partial`/`metadata` and `expire_after`/`min_count`/`max_count` respectively) are still evolving, the same rationale used for ILM policy phases elsewhere in this project.
+
+`/Elastic_Source/Connections/` - this folder contains a set of json files, each of which is this extension's own record of an Elastic Cloud deployment to connect to (not a request body for any Elastic API). Each connection is defined in a json file named the same as its own generated `id`, eg `/Elastic_Source/Connections/3fa2....json`.
+
+```json
+{
+  "id": "3fa2c1e0-...",
+  "name": "Staging Deployment",
+  "cloudId": "staging:dXMtZWFzdC0xLmF3cy5mb3VuZC5pbyRhYmNkMTIzNCRlZmdoNTY3OA=="
+}
+```
+* The file name must be the same as the `id` attribute. Unlike every other artifact type in this project, `id` isn't user-entered - it's generated once when the connection is first saved (`generateId()` in `fileSystem.ts`) and never changes, since it also doubles as the SecretStorage key for the API key (see below).
+* **Name** is a required free-text display name.
+* **Cloud ID** is a required free-text field - the deployment's Cloud ID, copied from the "Copy Cloud ID" action in the Elastic Cloud console. It's validated on save by decoding it (`src/connections/cloudId.ts`) into the deployment's Elasticsearch and Kibana endpoint URLs.
+* **API Key** is a required field only when creating a new connection (optional, and left blank, when editing one - blank means "keep the currently stored key"). It is deliberately **not** part of this JSON shape and is never written to disk: it's stored in VS Code's [SecretStorage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage), keyed by the connection's `id` (`src/connections/connectionManager.ts`).
+
+Expanding a saved connection in the tree shows a **Spaces** node, which fetches that deployment's Kibana Spaces live via the [Get All Spaces API](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space) (`src/connections/kibanaClient.ts`) using the stored API key, and lists them read-only - unlike every other artifact type in this project, they are not saved as local files, and clicking one opens a read-only view rather than an editable form.

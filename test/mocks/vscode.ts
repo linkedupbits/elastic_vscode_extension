@@ -151,6 +151,33 @@ export const commands = {
   executeCommand: async () => undefined,
 };
 
+// ---------- secrets ----------
+
+/** Minimal in-memory fake of vscode.SecretStorage, backed by a Map instead of the OS keychain. */
+export class MockSecretStorage {
+  private readonly values = new Map<string, string>();
+  private readonly changeEmitter = new EventEmitter<{ key: string }>();
+  readonly onDidChange = this.changeEmitter.event;
+
+  async get(key: string): Promise<string | undefined> {
+    return this.values.get(key);
+  }
+
+  async store(key: string, value: string): Promise<void> {
+    this.values.set(key, value);
+    this.changeEmitter.fire({ key });
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+    this.changeEmitter.fire({ key });
+  }
+
+  async keys(): Promise<string[]> {
+    return [...this.values.keys()];
+  }
+}
+
 // ---------- tree view ----------
 
 export enum TreeItemCollapsibleState {

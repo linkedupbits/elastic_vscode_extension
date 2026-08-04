@@ -20,7 +20,12 @@ other code.
 - Saves land as `.json` files under a configurable project root, named after the artifact
   itself, ready to be applied to a real deployment by whatever tooling/pipeline you use for
   that (this extension only manages the source-of-truth files, it does not call the
-  Elasticsearch/Fleet APIs itself).
+  Elasticsearch/Fleet APIs itself for any of these artifact types).
+- The one exception is the **Connections** category: register an Elastic Cloud deployment
+  (Cloud ID + API Key) to browse its *live* data. The API key is stored in VS Code's
+  [SecretStorage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage) -
+  never written to disk - and is used to fetch that deployment's Kibana Spaces on demand,
+  shown read-only under the connection in the tree.
 
 ![alt text](docs/explorer.png)
 
@@ -42,11 +47,22 @@ All artifacts live under a single project root folder (`Elastic_Source` by defau
 | `Role_Mappings/` | Security Role Mappings | [Put Role Mapping](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role-mapping) |
 | `Spaces/` | Kibana Spaces | [Create Space](https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-spaces-space) |
 | `SnapshotPolicies/` | Snapshot Lifecycle Management Policies | [Put Snapshot Lifecycle Policy](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-slm-put-lifecycle) |
+| `Connections/` | Elastic Cloud connections (non-secret metadata only - see below) | — |
 
 Each JSON file is named after the artifact's own `name` (or, for Agent Policies, the owning
 folder name too) and maps directly onto the request body of the linked API, with `name`
 added at the top level since most of these APIs take the name from the URL path rather than
 the body.
+
+### Connections
+
+Unlike the artifact types above, a Connection isn't applied to a deployment - it's a record
+*this extension* uses to talk to one. Its JSON file only ever holds non-secret metadata
+(`id`, `name`, `cloudId`); the API key you enter is stored in VS Code's SecretStorage, keyed
+by the connection's `id`, and is never written to the file. Expanding a connection in the
+tree fetches its Spaces live from that deployment's Kibana
+([Get All Spaces](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space))
+and shows them read-only - they aren't saved locally.
 
 See [`claude.md`](claude.md) for the full field-by-field breakdown of every artifact type,
 including which fields are curated into structured controls vs. left as JSON escape hatches

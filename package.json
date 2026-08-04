@@ -25,7 +25,7 @@
         "elasticSource.rootFolder": {
           "type": "string",
           "default": "Elastic_Source",
-          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines, Index_Templates, Roles, Role_Mappings, Spaces and SnapshotPolicies."
+          "description": "Path (relative to the workspace root) of the Elastic Source project folder that contains Logical_Environments, Fleet_Proxies, Fleet_Download_Sources, Fleet_Agent_Policies, Index_Lifecycle_Policies, Ingest_Pipelines, Index_Templates, Roles, Role_Mappings, Spaces, SnapshotPolicies and Connections."
         }
       }
     },
@@ -121,8 +121,19 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.newConnection",
+        "title": "New Connection",
+        "icon": "$(add)",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.openArtifact",
         "title": "Open",
+        "category": "Elastic Source"
+      },
+      {
+        "command": "elasticSource.openLiveSpace",
+        "title": "Open Space",
         "category": "Elastic Source"
       },
       {
@@ -208,19 +219,28 @@
           "group": "inline"
         },
         {
+          "command": "elasticSource.newConnection",
+          "when": "view == elasticSourceExplorer && viewItem == category-connections",
+          "group": "inline"
+        },
+        {
           "command": "elasticSource.deleteArtifact",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space || viewItem == snapshotpolicy)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space || viewItem == snapshotpolicy || viewItem == connection)",
           "group": "inline@2"
         },
         {
           "command": "elasticSource.revealInExplorer",
-          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space || viewItem == snapshotpolicy)",
+          "when": "view == elasticSourceExplorer && (viewItem == proxy || viewItem == downloadsource || viewItem == agentpolicy || viewItem == integrationpolicy || viewItem == ilmpolicy || viewItem == ingestpipeline || viewItem == indextemplate || viewItem == role || viewItem == rolemapping || viewItem == space || viewItem == snapshotpolicy || viewItem == connection)",
           "group": "7_modification"
         }
       ],
       "commandPalette": [
         {
           "command": "elasticSource.openArtifact",
+          "when": "false"
+        },
+        {
+          "command": "elasticSource.openLiveSpace",
           "when": "false"
         },
         {

@@ -1,9 +1,15 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { decodeCloudId } from '../connections/cloudId';
+import { getApiKey } from '../connections/connectionManager';
+import { fetchSpaces } from '../connections/kibanaClient';
 import { NoWorkspaceError } from '../config';
+import { readJsonFile } from '../fileSystem';
+import { ConnectionDefinition } from '../models';
 import {
   FailedArtifact,
   isLoadedArtifact,
+  listConnections,
   listFleetAgentPolicies,
   listFleetDownloadSources,
   listFleetProxies,
@@ -19,6 +25,11 @@ import {
 import { ElasticTreeItem } from './elasticTreeItem';
 
 const CATEGORIES = [
+  {
+    id: 'category-connections',
+    label: 'Connections',
+    icon: 'plug',
+  },
   {
     id: 'category-proxies',
     label: 'Fleet Proxies',
@@ -75,6 +86,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ElasticTreeItem | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+  constructor(private readonly secrets: vscode.SecretStorage) {}
+
   refresh(): void {
     this._onDidChangeTreeData.fire();
   }
@@ -96,6 +109,19 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
       }
 
       switch (element.contextValue) {
+        case 'category-connections':
+          return await this.getConnectionItems();
+        case 'connection':
+          return [
+            new ElasticTreeItem('Spaces', vscode.TreeItemCollapsibleState.Collapsed, {
+              contextValue: 'connection-spaces',
+              iconPath: new vscode.ThemeIcon('symbol-namespace'),
+              filePath: element.filePath,
+              connectionId: element.connectionId,
+            }),
+          ];
+        case 'connection-spaces':
+          return await this.getLiveSpaceItems(element);
         case 'category-proxies':
           return await this.getProxyItems();
         case 'category-downloadsources':
@@ -148,6 +174,70 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         arguments: [{ filePath, message: error.message }],
       },
     });
+  }
+
+  /** A single informational/error leaf, used where a category has nothing to show but shouldn't render empty. */
+  private buildMessageItem(label: string, icon: string, tooltip?: string): ElasticTreeItem {
+    return new ElasticTreeItem(label, vscode.TreeItemCollapsibleState.None, {
+      contextValue: 'message',
+      iconPath: new vscode.ThemeIcon(icon),
+      tooltip,
+    });
+  }
+
+  private async getConnectionItems(): Promise<ElasticTreeItem[]> {
+    const connections = await listConnections();
+    return connections.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.name, vscode.TreeItemCollapsibleState.Collapsed, {
+        contextValue: 'connection',
+        iconPath: new vscode.ThemeIcon('cloud'),
+        description: data.cloudId,
+        filePath,
+        artifactType: 'connection',
+        connectionId: data.id,
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'connection', filePath }],
+        },
+      });
+    });
+  }
+
+  private async getLiveSpaceItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
+    const connectionFilePath = element.filePath as string;
+    const connectionId = element.connectionId as string;
+
+    const apiKey = await getApiKey(this.secrets, connectionId);
+    if (!apiKey) {
+      return [this.buildMessageItem('No API key stored for this connection.', 'warning')];
+    }
+
+    try {
+      const connection = await readJsonFile<ConnectionDefinition>(connectionFilePath);
+      const { kibanaUrl } = decodeCloudId(connection.cloudId);
+      const spaces = await fetchSpaces(kibanaUrl, apiKey);
+      return spaces.map(
+        (space) =>
+          new ElasticTreeItem(space.name, vscode.TreeItemCollapsibleState.None, {
+            contextValue: 'connection-space',
+            iconPath: new vscode.ThemeIcon('symbol-namespace'),
+            description: space.id,
+            command: {
+              command: 'elasticSource.openLiveSpace',
+              title: 'Open',
+              arguments: [{ connectionName: connection.name, space }],
+            },
+          })
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return [this.buildMessageItem(`Failed to fetch spaces: ${message}`, 'error', message)];
+    }
   }
 
   private async getProxyItems(): Promise<ElasticTreeItem[]> {

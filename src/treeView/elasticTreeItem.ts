@@ -11,7 +11,8 @@ export type ArtifactType =
   | 'role'
   | 'rolemapping'
   | 'space'
-  | 'snapshotpolicy';
+  | 'snapshotpolicy'
+  | 'connection';
 
 export class ElasticTreeItem extends vscode.TreeItem {
   constructor(
@@ -27,6 +28,8 @@ export class ElasticTreeItem extends vscode.TreeItem {
       filePath?: string;
       /** Which artifact editor this item should open. */
       artifactType?: ArtifactType;
+      /** For a `connection`/`connection-spaces` node: the id of the connection it belongs to, used to look up its stored API key. */
+      connectionId?: string;
     }
   ) {
     super(label, collapsibleState);
@@ -37,8 +40,10 @@ export class ElasticTreeItem extends vscode.TreeItem {
     this.command = options.command;
     this.filePath = options.filePath;
     this.artifactType = options.artifactType;
+    this.connectionId = options.connectionId;
   }
 
   filePath?: string;
   artifactType?: ArtifactType;
+  connectionId?: string;
 }

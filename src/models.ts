@@ -267,3 +267,18 @@ export interface SnapshotPolicyDefinition {
  * elsewhere in this project.
  */
 export type SnapshotPolicyFile = Record<string, Omit<SnapshotPolicyDefinition, 'policyId'>>;
+
+/**
+ * Non-secret metadata for a saved Elastic Cloud connection, used to fetch live data (starting
+ * with Kibana Spaces) from a real deployment. Unlike every other artifact type in this project,
+ * this doesn't mirror an Elastic API request body - it's this extension's own record of a
+ * deployment to connect to. `id` is generated once at creation time (see `generateId` in
+ * `fileSystem.ts`) and drives both the saved file name and the SecretStorage key for the API
+ * key. The API key itself is deliberately NOT part of this shape - it's never written to disk,
+ * it lives only in VS Code's SecretStorage (see `connections/connectionManager.ts`).
+ */
+export interface ConnectionDefinition {
+  id: string;
+  name: string;
+  cloudId: string;
+}

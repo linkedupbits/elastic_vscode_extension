@@ -1,7 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { storeApiKey } from '../../src/connections/connectionManager';
+import { fetchSpaces } from '../../src/connections/kibanaClient';
 import { generateId } from '../../src/fileSystem';
+import { SpaceDefinition } from '../../src/models';
 import {
+  saveConnection,
   saveFleetAgentPolicy,
   saveFleetDownloadSource,
   saveFleetProxy,
@@ -18,14 +22,24 @@ import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
 import { vscodeMock } from '../helpers/vscodeMock';
 
+jest.mock('../../src/connections/kibanaClient');
+const mockFetchSpaces = fetchSpaces as jest.MockedFunction<typeof fetchSpaces>;
+
+const VALID_CLOUD_ID = `staging:${Buffer.from('us-east-1.aws.found.io$abcd1234$efgh5678', 'utf8').toString(
+  'base64'
+)}`;
+
 describe('ElasticTreeProvider', () => {
   let workspaceRoot: string;
   let provider: ElasticTreeProvider;
+  let secrets: InstanceType<typeof vscodeMock.MockSecretStorage>;
 
   beforeEach(() => {
     workspaceRoot = makeTempDir();
     vscodeMock.__setWorkspaceFolders(workspaceRoot);
-    provider = new ElasticTreeProvider();
+    secrets = new vscodeMock.MockSecretStorage();
+    provider = new ElasticTreeProvider(secrets);
+    mockFetchSpaces.mockReset();
   });
 
   afterEach(() => {
@@ -43,6 +57,7 @@ describe('ElasticTreeProvider', () => {
       vscodeMock.__resetWorkspace();
       const children = await provider.getChildren();
       expect(children.map((c) => c.contextValue)).toEqual([
+        'category-connections',
         'category-proxies',
         'category-downloadsources',
         'category-agentpolicies',
@@ -58,8 +73,8 @@ describe('ElasticTreeProvider', () => {
 
     it('expanding a category with no workspace open shows an "open a folder" message item', async () => {
       vscodeMock.__resetWorkspace();
-      const [proxiesCategory] = await provider.getChildren();
-      const children = await provider.getChildren(proxiesCategory);
+      const [firstCategory] = await provider.getChildren();
+      const children = await provider.getChildren(firstCategory);
       expect(children).toHaveLength(1);
       expect(children[0].contextValue).toBe('message');
     });
@@ -67,6 +82,7 @@ describe('ElasticTreeProvider', () => {
     it('shows the top-level categories, all collapsed', async () => {
       const children = await provider.getChildren();
       expect(children.map((c) => c.contextValue)).toEqual([
+        'category-connections',
         'category-proxies',
         'category-downloadsources',
         'category-agentpolicies',
@@ -79,6 +95,7 @@ describe('ElasticTreeProvider', () => {
         'category-snapshotpolicies',
       ]);
       expect(children.map((c) => c.label)).toEqual([
+        'Connections',
         'Fleet Proxies',
         'Fleet Download Sources',
         'Fleet Agent Policies',
@@ -97,7 +114,8 @@ describe('ElasticTreeProvider', () => {
 
   describe('Fleet Proxies category', () => {
     it('is empty when no proxies exist', async () => {
-      const [proxiesCategory] = await provider.getChildren();
+      const children = await provider.getChildren();
+      const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       expect(await provider.getChildren(proxiesCategory)).toEqual([]);
     });
 
@@ -112,7 +130,8 @@ describe('ElasticTreeProvider', () => {
         is_preconfigured: false,
       });
 
-      const [proxiesCategory] = await provider.getChildren();
+      const children = await provider.getChildren();
+      const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const [proxyItem] = await provider.getChildren(proxiesCategory);
 
       expect(proxyItem.label).toBe('WNP Proxy');
@@ -524,6 +543,103 @@ describe('ElasticTreeProvider', () => {
     });
   });
 
+  describe('Connections category and its Spaces children', () => {
+    it('is empty when no connections exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('lists saved connections as collapsible items showing the cloud id as description', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('Staging');
+      expect(item.contextValue).toBe('connection');
+      expect(item.artifactType).toBe('connection');
+      expect(item.description).toBe(VALID_CLOUD_ID);
+      // TreeItemCollapsibleState.Collapsed === 1
+      expect(item.collapsibleState).toBe(1);
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'connection', filePath: item.filePath });
+    });
+
+    it('expanding a connection shows exactly one "Spaces" node', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const spacesChildren = await provider.getChildren(connectionItem);
+
+      expect(spacesChildren).toHaveLength(1);
+      expect(spacesChildren[0].label).toBe('Spaces');
+      expect(spacesChildren[0].contextValue).toBe('connection-spaces');
+      expect(spacesChildren[0].collapsibleState).toBe(1);
+    });
+
+    it('shows a message item when no api key is stored for the connection', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const [spacesNode] = await provider.getChildren(connectionItem);
+      const spaceItems = await provider.getChildren(spacesNode);
+
+      expect(spaceItems).toHaveLength(1);
+      expect(spaceItems[0].contextValue).toBe('message');
+      expect(spaceItems[0].label).toBe('No API key stored for this connection.');
+      expect(mockFetchSpaces).not.toHaveBeenCalled();
+    });
+
+    it('lists live spaces fetched from the deployment as leaves with an open command', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+      await storeApiKey(secrets, 'conn-1', 'my-api-key');
+      const spaces: SpaceDefinition[] = [
+        { id: 'default', name: 'Default' },
+        { id: 'marketing', name: 'Marketing' },
+      ];
+      mockFetchSpaces.mockResolvedValue(spaces);
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const [spacesNode] = await provider.getChildren(connectionItem);
+      const spaceItems = await provider.getChildren(spacesNode);
+
+      expect(mockFetchSpaces).toHaveBeenCalledWith('https://efgh5678.us-east-1.aws.found.io', 'my-api-key');
+      expect(spaceItems).toHaveLength(2);
+      expect(spaceItems[0].label).toBe('Default');
+      expect(spaceItems[0].contextValue).toBe('connection-space');
+      expect(spaceItems[0].description).toBe('default');
+      expect(spaceItems[0].collapsibleState).toBe(0);
+      const command = spaceItems[0].command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openLiveSpace');
+      expect(command.arguments[0]).toEqual({ connectionName: 'Staging', space: spaces[0] });
+    });
+
+    it('shows a message item with the error when the fetch fails', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+      await storeApiKey(secrets, 'conn-1', 'my-api-key');
+      mockFetchSpaces.mockRejectedValue(new Error('Failed to fetch spaces (401 Unauthorized).'));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const [spacesNode] = await provider.getChildren(connectionItem);
+      const spaceItems = await provider.getChildren(spacesNode);
+
+      expect(spaceItems).toHaveLength(1);
+      expect(spaceItems[0].contextValue).toBe('message');
+      expect(spaceItems[0].label).toBe('Failed to fetch spaces: Failed to fetch spaces (401 Unauthorized).');
+    });
+  });
+
   describe('Snapshot Policies category', () => {
     it('is empty when no snapshot policies exist', async () => {
       const children = await provider.getChildren();
@@ -576,7 +692,8 @@ describe('ElasticTreeProvider', () => {
         is_preconfigured: false,
       });
 
-      const [proxiesCategory] = await provider.getChildren();
+      const children = await provider.getChildren();
+      const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const items = await provider.getChildren(proxiesCategory);
 
       expect(items.map((i) => i.contextValue)).toEqual(expect.arrayContaining(['proxy', 'load-error']));
@@ -590,7 +707,8 @@ describe('ElasticTreeProvider', () => {
       fs.mkdirSync(proxiesDir, { recursive: true });
       fs.writeFileSync(path.join(proxiesDir, 'corrupt.json'), '{ not valid json');
 
-      const [proxiesCategory] = await provider.getChildren();
+      const children = await provider.getChildren();
+      const proxiesCategory = children.find((c) => c.contextValue === 'category-proxies')!;
       const [errorItem] = await provider.getChildren(proxiesCategory);
 
       const command = errorItem.command as unknown as { command: string; arguments: unknown[] };

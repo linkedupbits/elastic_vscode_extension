@@ -62,3 +62,7 @@ export function getSpacesDir(): string {
 export function getSnapshotPoliciesDir(): string {
   return path.join(getElasticSourceRoot(), 'SnapshotPolicies');
 }
+
+export function getConnectionsDir(): string {
+  return path.join(getElasticSourceRoot(), 'Connections');
+}
