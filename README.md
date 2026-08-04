@@ -40,7 +40,7 @@ All artifacts live under a single project root folder (`Elastic_Source` by defau
 | `Fleet_Proxies/` | Fleet proxy servers | — |
 | `Fleet_Download_Sources/` | Fleet artifact download sources | — |
 | `Fleet_Agent_Policies/<name>/<name>.json` | Fleet Agent Policies | [Create Agent Policies](https://www.elastic.co/docs/api/doc/serverless/operation/operation-post-fleet-agent-policies) |
-| `Fleet_Agent_Policies/<name>/Integrations/*.json` | Integration Policies (System v2.22.1 & v2.3.2, Nginx v3.2.1) | package manifests on [elastic/integrations](https://github.com/elastic/integrations) / [Elastic Package Registry](https://epr.elastic.co) |
+| `Fleet_Agent_Policies/<name>/Integrations/*.json` | Integration Policies - 14 (package, version) pairs across System, Nginx, Apache, APM, MySQL, Custom Logs (Filestream), PHP-FPM, Prometheus, Custom Logs (Deprecated) and PostgreSQL; see [`claude.md`](claude.md) for the full table | [Elastic Package Registry](https://epr.elastic.co) package manifests |
 | `Index_Lifecycle_Policies/` | ILM Policies | [Put Lifecycle](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ilm-put-lifecycle) |
 | `Ingest_Pipelines/` | Ingest Pipelines | [Put Pipeline](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-ingest-put-pipeline) |
 | `Index_Templates/` | Index Templates | [Put Index Template](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-put-index-template) |

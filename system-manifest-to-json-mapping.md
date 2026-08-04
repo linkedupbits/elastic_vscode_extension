@@ -6,10 +6,11 @@ This document explains how the System package's `manifest.yml` file maps to the 
 > some example values below (e.g. `policy_templates[].name: linux`, `/var/log/maillog*` in
 > syslog's default paths) don't match the real, verified manifest for any published System
 > package version. For exact field-by-field values of a specific version, use the real
-> `PackageTemplate` sources instead: `src/integrations/systemPackage.ts` (2.22.1) and
-> `src/integrations/systemPackage_2_3_2.ts` (2.3.2), both transcribed directly from
-> published package manifests. See [`claude.md`](claude.md)'s "Sourcing a historical package
-> version" section for how to fetch and verify a specific version's manifests yourself.
+> `PackageTemplate` sources instead: `src/integrations/systemPackage_2_22_1.ts` (2.22.1),
+> `src/integrations/systemPackage_2_6_3.ts` (2.6.3), and
+> `src/integrations/systemPackage_2_3_2.ts` (2.3.2), all transcribed directly from
+> published package manifests. See [`claude.md`](claude.md)'s "Sourcing package manifest
+> data" section for how to fetch and verify a specific version's manifests yourself.
 
 ---
 
