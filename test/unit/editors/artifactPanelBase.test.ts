@@ -5,7 +5,7 @@ import { generateId } from '../../../src/fileSystem';
 import { saveFleetProxy } from '../../../src/repositories';
 import { makeTempDir, removeTempDir } from '../../helpers/tempDir';
 import { vscodeMock } from '../../helpers/vscodeMock';
-import { lastPanel, sendCancel, sendReady, sendSave } from '../../helpers/webviewPanel';
+import { lastPanel, sendCancel, sendOpenInEditor, sendReady, sendSave } from '../../helpers/webviewPanel';
 
 /** Exercises the defensive `err instanceof Error ? ... : String(err)` fallback in ArtifactPanelBase's save handler. */
 class ThrowingPanel extends ArtifactPanelBase {
@@ -104,6 +104,31 @@ describe('ArtifactPanelBase (via ProxyEditorPanel)', () => {
     await sendCancel();
 
     expect(panel.disposed).toBe(true);
+  });
+
+  it('"openInEditor" opens the backing file in the default text editor', async () => {
+    const filePath = await saveFleetProxy(undefined, {
+      id: generateId(),
+      name: 'Existing Proxy',
+      url: 'http://proxy.internal:3128',
+      certificate_authorities: '',
+      certificates: '',
+      certificate_key: '',
+      is_preconfigured: false,
+    });
+    ProxyEditorPanel.openExisting(extensionUri, () => undefined, filePath);
+
+    await sendOpenInEditor();
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledWith(vscode.Uri.file(filePath));
+  });
+
+  it('"openInEditor" is a no-op for a new (unsaved) panel with no backing file', async () => {
+    ProxyEditorPanel.openNew(extensionUri, () => undefined);
+
+    await sendOpenInEditor();
+
+    expect(vscode.window.showTextDocument).not.toHaveBeenCalled();
   });
 
   it('an unrecognized message type is a no-op', async () => {

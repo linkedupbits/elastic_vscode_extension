@@ -129,7 +129,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
       command: {
         command: 'elasticSource.showArtifactLoadError',
         title: 'Show Load Error',
-        arguments: [error.message],
+        arguments: [{ filePath, message: error.message }],
       },
     });
   }

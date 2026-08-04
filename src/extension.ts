@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { NoWorkspaceError } from './config';
 import { AgentPolicyEditorPanel } from './editors/agentPolicyEditorPanel';
+import { ArtifactLoadErrorPanel } from './editors/artifactLoadErrorPanel';
 import { DownloadSourceEditorPanel } from './editors/downloadSourceEditorPanel';
 import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
 import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
@@ -204,9 +205,12 @@ export function activate(context: vscode.ExtensionContext): void {
       refresh();
     }),
 
-    vscode.commands.registerCommand('elasticSource.showArtifactLoadError', (message: string) => {
-      void vscode.window.showErrorMessage(message);
-    }),
+    vscode.commands.registerCommand(
+      'elasticSource.showArtifactLoadError',
+      (args: { filePath: string; message: string }) => {
+        ArtifactLoadErrorPanel.open(context.extensionUri, args.filePath, args.message);
+      }
+    ),
 
     vscode.commands.registerCommand('elasticSource.revealInExplorer', (item: ElasticTreeItem) => {
       if (item.filePath) {

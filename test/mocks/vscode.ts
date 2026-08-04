@@ -130,6 +130,7 @@ export function __getLastCreatedWebviewPanel(): MockWebviewPanel | undefined {
 /** Test helper: clears the record of created webview panels between tests. */
 export function __resetWebviewPanels(): void {
   createdWebviewPanels.length = 0;
+  (window.showTextDocument as jest.Mock).mockClear();
 }
 
 export const window = {
@@ -141,6 +142,7 @@ export const window = {
   showWarningMessage: async () => undefined,
   showInformationMessage: async () => undefined,
   showQuickPick: async () => undefined,
+  showTextDocument: jest.fn(async () => undefined),
   registerTreeDataProvider: () => ({ dispose: () => undefined }),
 };
 

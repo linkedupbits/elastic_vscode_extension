@@ -68,6 +68,10 @@ export async function readJsonFile<T>(filePath: string): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
+export async function readTextFile(filePath: string): Promise<string> {
+  return fs.readFile(filePath, 'utf8');
+}
+
 export async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
   await ensureDir(path.dirname(filePath));
   await fs.writeFile(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');

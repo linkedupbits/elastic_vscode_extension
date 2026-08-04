@@ -161,13 +161,26 @@ button.secondary:hover {
 .banner.error {
   background: var(--vscode-inputValidation-errorBackground);
   border: 1px solid var(--vscode-inputValidation-errorBorder);
-  color: var(--vscode-foreground);
+  color: var(--vscode-errorForeground);
 }
 
 .banner.info {
   background: var(--vscode-inputValidation-infoBackground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
   color: var(--vscode-foreground);
+}
+
+.raw-json {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 1em);
+  background: var(--vscode-textCodeBlock-background, transparent);
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 60vh;
+  overflow: auto;
 }
 
 details.integration-input {

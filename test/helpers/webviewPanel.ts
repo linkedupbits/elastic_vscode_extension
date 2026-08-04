@@ -29,3 +29,8 @@ export async function sendSave(payload: unknown): Promise<{ type: string; [key: 
 export async function sendCancel(): Promise<void> {
   await lastPanel().webview.__receive({ type: 'cancel' });
 }
+
+/** Simulates the webview's "open in editor" button being clicked. */
+export async function sendOpenInEditor(): Promise<void> {
+  await lastPanel().webview.__receive({ type: 'openInEditor' });
+}

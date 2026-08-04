@@ -85,6 +85,11 @@ export abstract class ArtifactPanelBase {
       case 'cancel':
         this.panel.dispose();
         return;
+      case 'openInEditor':
+        if (this.filePath) {
+          void vscode.window.showTextDocument(vscode.Uri.file(this.filePath));
+        }
+        return;
     }
   }
 

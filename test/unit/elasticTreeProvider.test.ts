@@ -534,7 +534,10 @@ describe('ElasticTreeProvider', () => {
 
       const command = errorItem.command as unknown as { command: string; arguments: unknown[] };
       expect(command.command).toBe('elasticSource.showArtifactLoadError');
-      expect(typeof command.arguments[0]).toBe('string');
+      expect(command.arguments[0]).toEqual({
+        filePath: path.join(proxiesDir, 'corrupt.json'),
+        message: expect.any(String),
+      });
     });
 
     it('also flags a syntactically-valid json file that is missing "name" (e.g. a Role)', async () => {
