@@ -1,5 +1,5 @@
-import { fetchAgentPolicies, fetchSpaces } from '../../../src/connections/kibanaClient';
-import { FleetAgentPolicy, SpaceDefinition } from '../../../src/models';
+import { fetchAgentPolicies, fetchPackagePolicies, fetchSpaces } from '../../../src/connections/kibanaClient';
+import { FleetAgentPolicy, FleetPackagePolicy, SpaceDefinition } from '../../../src/models';
 
 describe('fetchSpaces', () => {
   const originalFetch = global.fetch;
@@ -144,6 +144,91 @@ describe('fetchAgentPolicies', () => {
     global.fetch = mockFetch as unknown as typeof fetch;
 
     await expect(fetchAgentPolicies('https://example.kb.io', 'my-api-key')).rejects.toThrow(
+      'getaddrinfo ENOTFOUND'
+    );
+  });
+});
+
+describe('fetchPackagePolicies', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function packagePolicyFixture(overrides: Partial<FleetPackagePolicy> = {}): FleetPackagePolicy {
+    return {
+      id: 'integration-1',
+      name: 'system-cmt-default',
+      namespace: 'default',
+      description: '',
+      package: { name: 'system', title: 'System', version: '2.22.1', requires_root: true },
+      policy_id: 'policy-1',
+      policy_ids: ['policy-1'],
+      inputs: {},
+      output_id: null,
+      vars: {},
+      ...overrides,
+    };
+  }
+
+  it('requests the Get Package Policies API and unwraps the items envelope', async () => {
+    const policies: FleetPackagePolicy[] = [packagePolicyFixture()];
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: policies, total: 1, page: 1, perPage: 100 }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await fetchPackagePolicies('https://example.kb.io', 'my-api-key');
+
+    expect(result).toEqual(policies);
+    expect(mockFetch).toHaveBeenCalledWith('https://example.kb.io/api/fleet/package_policies?perPage=100', {
+      headers: {
+        Authorization: 'ApiKey my-api-key',
+        'kbn-xsrf': 'true',
+      },
+    });
+  });
+
+  it('strips a trailing slash from the Kibana URL', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: [] }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await fetchPackagePolicies('https://example.kb.io/', 'my-api-key');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.kb.io/api/fleet/package_policies?perPage=100',
+      expect.anything()
+    );
+  });
+
+  it('throws with the status when the response is not ok', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      json: async () => ({}),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await expect(fetchPackagePolicies('https://example.kb.io', 'bad-key')).rejects.toThrow(
+      'Failed to fetch integration policies (403 Forbidden).'
+    );
+  });
+
+  it('propagates a network error', async () => {
+    const mockFetch = jest.fn().mockRejectedValue(new Error('getaddrinfo ENOTFOUND'));
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await expect(fetchPackagePolicies('https://example.kb.io', 'my-api-key')).rejects.toThrow(
       'getaddrinfo ENOTFOUND'
     );
   });

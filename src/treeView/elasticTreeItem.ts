@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { FleetAgentPolicy, SpaceDefinition } from '../models';
+import { FleetAgentPolicy, FleetPackagePolicy, SpaceDefinition } from '../models';
 
 export type ArtifactType =
   | 'proxy'
@@ -33,8 +33,10 @@ export class ElasticTreeItem extends vscode.TreeItem {
       connectionId?: string;
       /** For a `connection-space` leaf: the live space data fetched to render it, used by the "Download to Project" command. */
       liveSpace?: SpaceDefinition;
-      /** For a `connection-agentpolicy` leaf: the live policy data fetched to render it, used by the "Download to Project" command. */
+      /** For a `connection-agentpolicy` node: the live policy data fetched to render it, used by the "Download to Project" command. */
       liveAgentPolicy?: FleetAgentPolicy;
+      /** For a `connection-agentpolicy` node: the live integration policies already assigned to it (via `policy_id`/`policy_ids`), rendered as its children on expansion. */
+      liveIntegrationPolicies?: FleetPackagePolicy[];
     }
   ) {
     super(label, collapsibleState);
@@ -48,6 +50,7 @@ export class ElasticTreeItem extends vscode.TreeItem {
     this.connectionId = options.connectionId;
     this.liveSpace = options.liveSpace;
     this.liveAgentPolicy = options.liveAgentPolicy;
+    this.liveIntegrationPolicies = options.liveIntegrationPolicies;
   }
 
   filePath?: string;
@@ -55,4 +58,5 @@ export class ElasticTreeItem extends vscode.TreeItem {
   connectionId?: string;
   liveSpace?: SpaceDefinition;
   liveAgentPolicy?: FleetAgentPolicy;
+  liveIntegrationPolicies?: FleetPackagePolicy[];
 }

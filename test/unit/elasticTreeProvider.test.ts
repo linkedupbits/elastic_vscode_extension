@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { storeApiKey } from '../../src/connections/connectionManager';
-import { fetchAgentPolicies, fetchSpaces } from '../../src/connections/kibanaClient';
+import { fetchAgentPolicies, fetchPackagePolicies, fetchSpaces } from '../../src/connections/kibanaClient';
 import { generateId } from '../../src/fileSystem';
-import { FleetAgentPolicy, SpaceDefinition } from '../../src/models';
+import { FleetAgentPolicy, FleetPackagePolicy, SpaceDefinition } from '../../src/models';
 import {
   saveConnection,
   saveFleetAgentPolicy,
@@ -26,6 +26,7 @@ import { vscodeMock } from '../helpers/vscodeMock';
 jest.mock('../../src/connections/kibanaClient');
 const mockFetchSpaces = fetchSpaces as jest.MockedFunction<typeof fetchSpaces>;
 const mockFetchAgentPolicies = fetchAgentPolicies as jest.MockedFunction<typeof fetchAgentPolicies>;
+const mockFetchPackagePolicies = fetchPackagePolicies as jest.MockedFunction<typeof fetchPackagePolicies>;
 
 const VALID_CLOUD_ID = `staging:${Buffer.from('us-east-1.aws.found.io$abcd1234$efgh5678', 'utf8').toString(
   'base64'
@@ -57,6 +58,10 @@ describe('ElasticTreeProvider', () => {
     provider = new ElasticTreeProvider(secrets);
     mockFetchSpaces.mockReset();
     mockFetchAgentPolicies.mockReset();
+    mockFetchPackagePolicies.mockReset();
+    // Most tests don't care about integration policies; default to an empty list so
+    // getLiveAgentPolicyItems's Promise.all doesn't hang/reject on an unmocked call.
+    mockFetchPackagePolicies.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -731,6 +736,102 @@ describe('ElasticTreeProvider', () => {
       expect(agentPolicyItems[0].label).toBe(
         'Failed to fetch agent policies: Failed to fetch agent policies (403 Forbidden).'
       );
+    });
+
+    describe('live integration policies assigned to a live agent policy', () => {
+      const agentPolicy: FleetAgentPolicy = {
+        id: 'policy-1',
+        name: 'CMT Default',
+        description: '',
+        monitoring_enabled: ['logs'],
+        inactivity_timeout: 1209600,
+        download_source_id: '',
+        schema_version: '1.1.0',
+        namespace: 'default',
+        advanced_settings: {},
+      };
+
+      function packagePolicyFixture(overrides: Partial<FleetPackagePolicy> = {}): FleetPackagePolicy {
+        return {
+          id: 'integration-1',
+          name: 'system-cmt-default',
+          namespace: 'default',
+          description: '',
+          package: { name: 'system', title: 'System', version: '2.22.1', requires_root: true },
+          policy_id: 'policy-1',
+          policy_ids: ['policy-1'],
+          inputs: {},
+          output_id: null,
+          vars: {},
+          ...overrides,
+        };
+      }
+
+      async function expandAgentPolicies(): Promise<ElasticTreeItem[]> {
+        const children = await provider.getChildren();
+        const category = children.find((c) => c.contextValue === 'category-connections')!;
+        const [connectionItem] = await provider.getChildren(category);
+        const connectionChildren = await provider.getChildren(connectionItem);
+        const agentPoliciesNode = connectionChildren.find((c) => c.contextValue === 'connection-agentpolicies')!;
+        return provider.getChildren(agentPoliciesNode);
+      }
+
+      beforeEach(async () => {
+        await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+        await storeApiKey(secrets, 'conn-1', 'my-api-key');
+        mockFetchAgentPolicies.mockResolvedValue([agentPolicy]);
+      });
+
+      it('fetches integration policies alongside agent policies and assigns matches via policy_id', async () => {
+        mockFetchPackagePolicies.mockResolvedValue([packagePolicyFixture()]);
+
+        const [agentPolicyItem] = await expandAgentPolicies();
+
+        expect(mockFetchPackagePolicies).toHaveBeenCalledWith(
+          'https://efgh5678.us-east-1.aws.found.io',
+          'my-api-key'
+        );
+        // TreeItemCollapsibleState.Collapsed === 1, since it has an assigned integration policy
+        expect(agentPolicyItem.collapsibleState).toBe(1);
+
+        const integrationItems = await provider.getChildren(agentPolicyItem);
+        expect(integrationItems).toHaveLength(1);
+        expect(integrationItems[0].label).toBe('system-cmt-default');
+        expect(integrationItems[0].contextValue).toBe('connection-integrationpolicy');
+        expect(integrationItems[0].description).toBe('System');
+      });
+
+      it('assigns an integration policy that references the agent policy only via policy_ids', async () => {
+        mockFetchPackagePolicies.mockResolvedValue([
+          packagePolicyFixture({ policy_id: 'some-other-policy', policy_ids: ['some-other-policy', 'policy-1'] }),
+        ]);
+
+        const [agentPolicyItem] = await expandAgentPolicies();
+        const integrationItems = await provider.getChildren(agentPolicyItem);
+
+        expect(integrationItems).toHaveLength(1);
+      });
+
+      it('does not assign an integration policy belonging to a different agent policy', async () => {
+        mockFetchPackagePolicies.mockResolvedValue([
+          packagePolicyFixture({ policy_id: 'some-other-policy', policy_ids: ['some-other-policy'] }),
+        ]);
+
+        const [agentPolicyItem] = await expandAgentPolicies();
+
+        // TreeItemCollapsibleState.None === 0, since nothing was assigned to it
+        expect(agentPolicyItem.collapsibleState).toBe(0);
+        expect(await provider.getChildren(agentPolicyItem)).toEqual([]);
+      });
+
+      it('still shows agent policies when the integration policies fetch fails', async () => {
+        mockFetchPackagePolicies.mockRejectedValue(new Error('Failed to fetch integration policies (403).'));
+
+        const [agentPolicyItem] = await expandAgentPolicies();
+
+        expect(agentPolicyItem.label).toBe('CMT Default');
+        expect(agentPolicyItem.collapsibleState).toBe(0);
+      });
     });
   });
 

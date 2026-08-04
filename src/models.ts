@@ -73,6 +73,17 @@ export interface IntegrationPolicy {
   vars: Record<string, VarValue>;
 }
 
+/**
+ * A single item from the Kibana Fleet Get Package Policies API response
+ * (https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-package-policies).
+ * Same shape as the on-disk `IntegrationPolicy`, plus `id` - the live API's own identifier,
+ * needed to key it as a tree item (the file-backed `IntegrationPolicy` doesn't need this since
+ * its file path already serves that purpose there).
+ */
+export interface FleetPackagePolicy extends IntegrationPolicy {
+  id: string;
+}
+
 export type IlmDataStreamType = 'logs' | 'metrics';
 
 /** Maps this ILM policy onto the specific integration data streams it should apply to. */

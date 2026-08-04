@@ -2,10 +2,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { decodeCloudId } from '../connections/cloudId';
 import { getApiKey } from '../connections/connectionManager';
-import { fetchAgentPolicies, fetchSpaces } from '../connections/kibanaClient';
+import { fetchAgentPolicies, fetchPackagePolicies, fetchSpaces } from '../connections/kibanaClient';
 import { NoWorkspaceError } from '../config';
 import { readJsonFile } from '../fileSystem';
-import { ConnectionDefinition } from '../models';
+import { ConnectionDefinition, FleetPackagePolicy } from '../models';
 import {
   FailedArtifact,
   isLoadedArtifact,
@@ -147,6 +147,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getLiveSpaceItems(element);
         case 'connection-agentpolicies':
           return await this.getLiveAgentPolicyItems(element);
+        case 'connection-agentpolicy':
+          return this.getLiveIntegrationPolicyItems(element);
         case 'category-proxies':
           return await this.getProxyItems();
         case 'category-downloadsources':
@@ -280,18 +282,66 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     });
   }
 
+  /**
+   * Fetches agent policies and integration (package) policies concurrently, so downloading the
+   * (usually larger) integration policy list never blocks the agent policy list from appearing.
+   * Each integration policy is then assigned client-side to the agent policy/policies it
+   * belongs to, via `policy_id`/inclusion in `policy_ids` - the same fields Fleet itself uses -
+   * and stashed on its `ElasticTreeItem` so expanding it later needs no further API call. If the
+   * integration policies fetch fails (e.g. missing Fleet permission), agent policies still show,
+   * just without any integration policy children.
+   */
   private async getLiveAgentPolicyItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
-    return this.getLiveItems(element, 'agent policies', fetchAgentPolicies, (policy, connectionName) => {
+    const connectionFilePath = element.filePath as string;
+    const connectionId = element.connectionId as string;
+
+    const apiKey = await getApiKey(this.secrets, connectionId);
+    if (!apiKey) {
+      return [this.buildMessageItem('No API key stored for this connection.', 'warning')];
+    }
+
+    try {
+      const connection = await readJsonFile<ConnectionDefinition>(connectionFilePath);
+      const { kibanaUrl } = decodeCloudId(connection.cloudId);
+      const [policies, integrationPolicies] = await Promise.all([
+        fetchAgentPolicies(kibanaUrl, apiKey),
+        fetchPackagePolicies(kibanaUrl, apiKey).catch(() => [] as FleetPackagePolicy[]),
+      ]);
+
+      return policies.map((policy) => {
+        const assigned = integrationPolicies.filter(
+          (pkg) => pkg.policy_id === policy.id || (pkg.policy_ids ?? []).includes(policy.id)
+        );
+        return new ElasticTreeItem(
+          policy.name,
+          assigned.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+          {
+            contextValue: 'connection-agentpolicy',
+            iconPath: new vscode.ThemeIcon('checklist'),
+            description: policy.namespace,
+            liveAgentPolicy: policy,
+            liveIntegrationPolicies: assigned,
+            command: {
+              command: 'elasticSource.openLiveAgentPolicy',
+              title: 'Open',
+              arguments: [{ connectionName: connection.name, policy }],
+            },
+          }
+        );
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return [this.buildMessageItem(`Failed to fetch agent policies: ${message}`, 'error', message)];
+    }
+  }
+
+  private getLiveIntegrationPolicyItems(element: ElasticTreeItem): ElasticTreeItem[] {
+    const integrationPolicies = element.liveIntegrationPolicies ?? [];
+    return integrationPolicies.map((policy) => {
       return new ElasticTreeItem(policy.name, vscode.TreeItemCollapsibleState.None, {
-        contextValue: 'connection-agentpolicy',
-        iconPath: new vscode.ThemeIcon('checklist'),
-        description: policy.namespace,
-        liveAgentPolicy: policy,
-        command: {
-          command: 'elasticSource.openLiveAgentPolicy',
-          title: 'Open',
-          arguments: [{ connectionName, policy }],
-        },
+        contextValue: 'connection-integrationpolicy',
+        iconPath: new vscode.ThemeIcon('plug'),
+        description: policy.package?.title,
       });
     });
   }

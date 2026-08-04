@@ -1,4 +1,4 @@
-import { FleetAgentPolicy, SpaceDefinition } from '../models';
+import { FleetAgentPolicy, FleetPackagePolicy, SpaceDefinition } from '../models';
 
 /** Shared GET helper: builds the standard authenticated Kibana API request every fetch here uses. */
 async function kibanaGet(kibanaUrl: string, apiKey: string, path: string): Promise<Response> {
@@ -42,5 +42,23 @@ export async function fetchAgentPolicies(kibanaUrl: string, apiKey: string): Pro
   }
 
   const body = (await response.json()) as { items: FleetAgentPolicy[] };
+  return body.items;
+}
+
+/**
+ * Fetches the full list of Fleet Integration (Package) Policies from a connected deployment via
+ * the Get Package Policies API (https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-package-policies).
+ * Paginated like Agent Policies; `perPage=100` covers typical deployments in a single request.
+ * Each item carries `policy_id`/`policy_ids`, which callers use to assign it to the agent
+ * policy/policies it belongs to.
+ */
+export async function fetchPackagePolicies(kibanaUrl: string, apiKey: string): Promise<FleetPackagePolicy[]> {
+  const response = await kibanaGet(kibanaUrl, apiKey, '/api/fleet/package_policies?perPage=100');
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch integration policies (${response.status} ${response.statusText}).`);
+  }
+
+  const body = (await response.json()) as { items: FleetPackagePolicy[] };
   return body.items;
 }
