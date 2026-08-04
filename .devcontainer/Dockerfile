@@ -8,7 +8,7 @@ USER root
 # of @vscode/vsce (used for `vsce login`/`vsce publish` credential storage). Not needed for
 # `npm run compile`/`npm test`/`npm run package`, but avoids an install-time build failure.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends libsecret-1-dev \
+    && apt-get -y install --no-install-recommends libsecret-1-dev ncat \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
