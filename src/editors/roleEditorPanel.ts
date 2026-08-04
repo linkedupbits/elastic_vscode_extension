@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readJsonFile, validateArtifactName } from '../fileSystem';
+import { validateArtifactName } from '../fileSystem';
 import {
   ApplicationPrivilegeFormValue,
   buildApplicationPrivilegesJson,
@@ -17,7 +17,7 @@ import {
   toStringArray,
 } from '../roles/rolePrivilegeTemplates';
 import { RoleDefinition } from '../models';
-import { saveRole } from '../repositories';
+import { loadRole, saveRole } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
 interface RoleFormItem {
@@ -133,7 +133,7 @@ export class RoleEditorPanel extends ArtifactPanelBase {
 
   protected async loadInitialPayload(): Promise<RolePayload> {
     if (this.filePath) {
-      const item = await readJsonFile<RoleDefinition>(this.filePath);
+      const item = await loadRole(this.filePath);
       return {
         isNew: false,
         item: {

@@ -413,7 +413,7 @@ describe('ElasticTreeProvider', () => {
     it('treats a legacy/malformed file with no cluster key as an empty description', async () => {
       const rolesDir = path.join(workspaceRoot, 'Elastic_Source', 'Roles');
       fs.mkdirSync(rolesDir, { recursive: true });
-      fs.writeFileSync(path.join(rolesDir, 'legacy-role.json'), JSON.stringify({ name: 'legacy-role' }));
+      fs.writeFileSync(path.join(rolesDir, 'legacy-role.json'), JSON.stringify({ 'legacy-role': {} }));
 
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-roles')!;
@@ -540,7 +540,7 @@ describe('ElasticTreeProvider', () => {
       });
     });
 
-    it('also flags a syntactically-valid json file that is missing "name" (e.g. a Role)', async () => {
+    it('also flags a syntactically-valid json Role file whose value is not a JSON object', async () => {
       const rolesDir = path.join(workspaceRoot, 'Elastic_Source', 'Roles');
       fs.mkdirSync(rolesDir, { recursive: true });
       fs.writeFileSync(path.join(rolesDir, 'errorRole.json'), JSON.stringify({ BadlyFormatted: 'Json' }));
@@ -550,7 +550,20 @@ describe('ElasticTreeProvider', () => {
       const [item] = await provider.getChildren(rolesCategory);
 
       expect(item.contextValue).toBe('load-error');
-      expect(item.tooltip).toMatch(/missing a valid "name"/);
+      expect(item.tooltip).toMatch(/must be a JSON object/);
+    });
+
+    it('also flags a Role file with no root key (name)', async () => {
+      const rolesDir = path.join(workspaceRoot, 'Elastic_Source', 'Roles');
+      fs.mkdirSync(rolesDir, { recursive: true });
+      fs.writeFileSync(path.join(rolesDir, 'empty.json'), JSON.stringify({}));
+
+      const children = await provider.getChildren();
+      const rolesCategory = children.find((c) => c.contextValue === 'category-roles')!;
+      const [item] = await provider.getChildren(rolesCategory);
+
+      expect(item.contextValue).toBe('load-error');
+      expect(item.tooltip).toMatch(/exactly one root key/);
     });
 
     it('also flags a Role Mapping file whose value is not a JSON object', async () => {

@@ -1,16 +1,17 @@
 {
-  "name": "A Role",
-  "description": "does stuff",
-  "indices": [
-    {
-      "names": [
-        "jhjgh",
-        "jhjgjhgj"
-      ],
-      "privileges": [
-        "read",
-        "all"
-      ]
-    }
-  ]
+  "A Role": {
+    "description": "does stuff",
+    "indices": [
+      {
+        "names": [
+          "jhjgh",
+          "jhjgjhgj"
+        ],
+        "privileges": [
+          "read",
+          "all"
+        ]
+      }
+    ]
+  }
 }

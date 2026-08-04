@@ -233,35 +233,36 @@ The structure of the json follows the request body of the [Put Index Template AP
   * **Aliases** - a repeatable list of alias rows, each with an **Alias Name**, **Is Write Index** / **Is Hidden** checkboxes, an optional **Routing** field, and an optional **Filter** JSON field for the alias's Query DSL filter (left as JSON since query DSL is itself open-ended, the same rationale as `_meta`).
 * `_meta` remains a free-form optional JSON editor, since it's arbitrary user metadata rather than a fixed schema.
 
-`/Elastic_Source/Roles/` - this folder contains a set of json files, each of which defines an Elasticsearch security role. Each role is defined in a json file named the same as the role's `name` attribute, eg `/Elastic_Source/Roles/cmt_read_only.json`.
+`/Elastic_Source/Roles/` - this folder contains a set of json files, each of which defines an Elasticsearch security role. Each role is defined in a json file named the same as the role's name, eg `/Elastic_Source/Roles/cmt_read_only.json`.
 
-The structure of the json follows the request body of the [Put Role API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role) directly (there's no wrapper key), with `name` added at the top level since the API takes the role name from the URL path rather than the body:
+The structure of the json matches the response body of the [Get Role API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-get-role): the role's name is the single root JSON key, and its value is the rest of the [Put Role API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role) request body (the API itself takes the name from the URL path rather than the body):
 ```json
 {
-  "name": "cmt_read_only",
-  "description": "Read-only access to CMT logs/metrics.",
-  "cluster": ["monitor"],
-  "indices": [
-    {
-      "names": ["logs-cmt-*", "metrics-cmt-*"],
-      "privileges": ["read", "view_index_metadata"],
-      "field_security": {
-        "grant": ["*"],
-        "except": ["secrets.*"]
-      },
-      "query": "{\"match\": {\"tenant\": \"cmt\"}}"
+  "cmt_read_only": {
+    "description": "Read-only access to CMT logs/metrics.",
+    "cluster": ["monitor"],
+    "indices": [
+      {
+        "names": ["logs-cmt-*", "metrics-cmt-*"],
+        "privileges": ["read", "view_index_metadata"],
+        "field_security": {
+          "grant": ["*"],
+          "except": ["secrets.*"]
+        },
+        "query": "{\"match\": {\"tenant\": \"cmt\"}}"
+      }
+    ],
+    "applications": [
+      { "application": "kibana-.kibana", "privileges": ["read"], "resources": ["*"] }
+    ],
+    "run_as": ["cmt_service_account"],
+    "metadata": {
+      "managed_by": "cmt"
     }
-  ],
-  "applications": [
-    { "application": "kibana-.kibana", "privileges": ["read"], "resources": ["*"] }
-  ],
-  "run_as": ["cmt_service_account"],
-  "metadata": {
-    "managed_by": "cmt"
   }
 }
 ```
-* The file name must be the same as the `name` attribute.
+* The file name must be the same as the root JSON key (the role's name).
 * Every field with a fixed, bounded shape is edited as a structured control rather than raw JSON (see `src/editors/roleEditorPanel.ts` and `src/roles/rolePrivilegeTemplates.ts`):
   * **Description** is an optional free-text field.
   * **Cluster Privileges** and **Run As** are each edited as a newline-separated list, one entry per line, mirroring the stringArray field convention used elsewhere in this project (e.g. Index Template's Index Patterns) rather than a fixed dropdown, since Elasticsearch's set of recognized cluster privilege names is large and evolves across versions.

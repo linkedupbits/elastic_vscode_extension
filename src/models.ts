@@ -156,7 +156,8 @@ export interface IndexTemplateDefinition {
  * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role).
  * Maps directly onto the real API body - there's no wrapper key - except for `name`, which
  * isn't part of the body (it's the URL path segment) but is kept here since it drives the
- * saved file name. `indices`/`remote_indices`/`applications`/`remote_cluster` are left as
+ * saved file name and (per `RoleFile` below) the saved file's root JSON key.
+ * `indices`/`remote_indices`/`applications`/`remote_cluster` are left as
  * `Record<string, unknown>[]` since their structured shape is enforced/documented by
  * ../roles/rolePrivilegeTemplates.ts's form-value interfaces instead (mirroring how
  * `IngestPipelineDefinition.processors` is typed). `metadata` and `global` are left free-form:
@@ -176,6 +177,13 @@ export interface RoleDefinition {
   metadata?: Record<string, unknown>;
   global?: Record<string, unknown>;
 }
+
+/**
+ * On-disk shape of a Role file. Unlike `RoleDefinition`, the name is stored as the single root
+ * JSON key rather than a `name` field, matching the shape Elasticsearch's own Get Role API
+ * returns (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-get-role).
+ */
+export type RoleFile = Record<string, Omit<RoleDefinition, 'name'>>;
 
 /**
  * Body shape of the Elasticsearch Put Role Mapping API

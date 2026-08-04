@@ -30,6 +30,7 @@ import {
   IntegrationPolicy,
   NamedRef,
   RoleDefinition,
+  RoleFile,
   RoleMappingDefinition,
   RoleMappingFile,
 } from './models';
@@ -93,6 +94,29 @@ async function loadArtifacts<T extends { name: string }>(
     })
   );
   return sortArtifacts(items);
+}
+
+/**
+ * Unwraps a file whose shape mirrors Elasticsearch's own "Get" API response - a single root
+ * key holding the artifact's name, its value the rest of the definition (used by Roles and
+ * Role Mappings; see `RoleFile`/`RoleMappingFile`).
+ */
+function fromNamedWrapperFile<T>(file: Record<string, T>, filePath: string, kind: string): { name: string } & T {
+  const entries = Object.entries(file);
+  if (entries.length !== 1) {
+    throw new Error(`"${path.basename(filePath)}" must have exactly one root key (the ${kind} name).`);
+  }
+  const [name, definition] = entries[0];
+  if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+    throw new Error(`"${path.basename(filePath)}" - the value of "${name}" must be a JSON object.`);
+  }
+  return { name, ...definition };
+}
+
+/** Wraps a `{ name, ...definition }` value back into its named-root-key on-disk shape. */
+function toNamedWrapperFile<T extends { name: string }>(data: T): Record<string, Omit<T, 'name'>> {
+  const { name, ...definition } = data;
+  return { [name]: definition } as Record<string, Omit<T, 'name'>>;
 }
 
 export class ArtifactConflictError extends Error {}
@@ -379,11 +403,17 @@ export async function deleteIndexTemplate(filePath: string): Promise<void> {
 }
 
 // ---------- Roles ----------
-// Each lives as a *.json file named after its own `name` attribute.
+// Each lives as a *.json file named after its own `name` attribute. On disk, the name is
+// stored as the file's root JSON key (matching the Elasticsearch Get Role API response shape)
+// rather than as a `name` field in the body - see `RoleFile`.
+
+export async function loadRole(filePath: string): Promise<RoleDefinition> {
+  return fromNamedWrapperFile(await readJsonFile<RoleFile>(filePath), filePath, 'role');
+}
 
 export async function listRoles(): Promise<ArtifactResult<RoleDefinition>[]> {
   const files = await listJsonFiles(getRolesDir());
-  return loadArtifacts(files, (filePath) => readJsonFile<RoleDefinition>(filePath));
+  return loadArtifacts(files, loadRole);
 }
 
 /**
@@ -397,7 +427,7 @@ export async function saveRole(existingFilePath: string | undefined, data: RoleD
     throw new ArtifactConflictError(`A Role named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, data);
+  await writeJsonFile(targetFile, toNamedWrapperFile(data));
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }
@@ -413,25 +443,8 @@ export async function deleteRole(filePath: string): Promise<void> {
 // stored as the file's root JSON key (matching the Elasticsearch Get Role Mapping API
 // response shape) rather than as a `name` field in the body - see `RoleMappingFile`.
 
-function roleMappingFromFile(file: RoleMappingFile, filePath: string): RoleMappingDefinition {
-  const entries = Object.entries(file);
-  if (entries.length !== 1) {
-    throw new Error(`"${path.basename(filePath)}" must have exactly one root key (the role mapping name).`);
-  }
-  const [name, definition] = entries[0];
-  if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
-    throw new Error(`"${path.basename(filePath)}" - the value of "${name}" must be a JSON object.`);
-  }
-  return { name, ...definition };
-}
-
-function roleMappingToFile(data: RoleMappingDefinition): RoleMappingFile {
-  const { name, ...definition } = data;
-  return { [name]: definition };
-}
-
 export async function loadRoleMapping(filePath: string): Promise<RoleMappingDefinition> {
-  return roleMappingFromFile(await readJsonFile<RoleMappingFile>(filePath), filePath);
+  return fromNamedWrapperFile(await readJsonFile<RoleMappingFile>(filePath), filePath, 'role mapping');
 }
 
 export async function listRoleMappings(): Promise<ArtifactResult<RoleMappingDefinition>[]> {
@@ -453,7 +466,7 @@ export async function saveRoleMapping(
     throw new ArtifactConflictError(`A Role Mapping named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, roleMappingToFile(data));
+  await writeJsonFile(targetFile, toNamedWrapperFile(data));
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }
