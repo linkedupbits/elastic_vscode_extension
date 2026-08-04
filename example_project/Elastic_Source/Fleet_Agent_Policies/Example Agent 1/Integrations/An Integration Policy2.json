@@ -5,7 +5,7 @@
   "package": {
     "name": "system",
     "title": "System",
-    "version": "2.22.1",
+    "version": "2.3.2",
     "requires_root": true
   },
   "policy_id": "efbf1bb8-a932-48ee-94d9-8ff4a5a72114",
@@ -199,19 +199,6 @@
           "vars": {
             "period": "10s",
             "network.interfaces": [],
-            "tags": [],
-            "processors": ""
-          }
-        },
-        "system.ntp": {
-          "enabled": false,
-          "vars": {
-            "period": "10s",
-            "ntp.servers": [
-              "pool.ntp.org"
-            ],
-            "ntp.timeout": "5s",
-            "ntp.version": "4",
             "tags": [],
             "processors": ""
           }

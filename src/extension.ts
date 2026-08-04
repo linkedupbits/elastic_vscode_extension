@@ -281,7 +281,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!selected) {
         return;
       }
-      const template = resolveIntegrationTemplate(selected.id);
+      const template = resolveIntegrationTemplate(selected.id, selected.version);
       if (!template) {
         return;
       }
