@@ -12,3 +12,7 @@ jest.config.js
 node_modules/**
 !node_modules/**/*.js.LICENSE.txt
 claude.md
+
+# exclude example project and examples folder
+example_project/**
+examples/**
