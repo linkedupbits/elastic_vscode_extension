@@ -43,7 +43,7 @@ export class IntegrationPolicyEditorPanel extends ArtifactPanelBase {
       'elasticSource.integrationPolicyEditor',
       filePath ? 'Integration Policy' : `New ${template?.title ?? ''} Integration`,
       filePath,
-      'integrationPolicyForm.js'
+      ['integrationPolicyRender.js', 'integrationPolicyForm.js']
     );
     this.template = template;
     this.agentPolicyFilePath = agentPolicyFilePath;

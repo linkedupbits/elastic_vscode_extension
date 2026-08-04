@@ -1,13 +1,5 @@
 import * as vscode from 'vscode';
-
-function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let i = 0; i < 32; i++) {
-    text += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return text;
-}
+import { getNonce } from './webviewNonce';
 
 type OutgoingMessage =
   | { type: 'init'; payload: unknown }
@@ -34,7 +26,8 @@ export abstract class ArtifactPanelBase {
     viewType: string,
     title: string,
     filePath: string | undefined,
-    private readonly scriptFileName: string
+    /** One script, or several loaded in order (e.g. a shared renderer followed by the form itself that uses it). */
+    private readonly scriptFileNames: string | string[]
   ) {
     this.filePath = filePath;
     this.registryKey = filePath ?? `${viewType}:new:${Date.now()}:${Math.random()}`;
@@ -103,9 +96,13 @@ export abstract class ArtifactPanelBase {
     const webview = this.panel.webview;
     const nonce = getNonce();
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'main.css'));
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'media', this.scriptFileName)
-    );
+    const scriptFileNames = Array.isArray(this.scriptFileNames) ? this.scriptFileNames : [this.scriptFileNames];
+    const scriptTags = scriptFileNames
+      .map((fileName) => {
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', fileName));
+        return `<script nonce="${nonce}" src="${scriptUri}"></script>`;
+      })
+      .join('\n  ');
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -118,7 +115,7 @@ export abstract class ArtifactPanelBase {
 <body>
   <div class="banner error" id="error-banner"></div>
   ${this.getFormBodyHtml()}
-  <script nonce="${nonce}" src="${scriptUri}"></script>
+  ${scriptTags}
 </body>
 </html>`;
   }

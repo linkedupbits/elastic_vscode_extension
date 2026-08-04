@@ -10,10 +10,7 @@ import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
 import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
 import { LiveAgentPolicyViewPanel } from './editors/liveAgentPolicyViewPanel';
-import {
-  LIVE_INTEGRATION_POLICY_SCHEME,
-  LiveIntegrationPolicyDocumentProvider,
-} from './editors/liveIntegrationPolicyDocumentProvider';
+import { LiveIntegrationPolicyViewPanel } from './editors/liveIntegrationPolicyViewPanel';
 import { LiveSpaceViewPanel } from './editors/liveSpaceViewPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { RoleEditorPanel } from './editors/roleEditorPanel';
@@ -83,12 +80,9 @@ async function downloadWithOverwriteConfirm(
 export function activate(context: vscode.ExtensionContext): void {
   const treeProvider = new ElasticTreeProvider(context.secrets);
   const refresh = () => treeProvider.refresh();
-  const liveIntegrationPolicyDocs = new LiveIntegrationPolicyDocumentProvider();
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('elasticSourceExplorer', treeProvider),
-
-    vscode.workspace.registerTextDocumentContentProvider(LIVE_INTEGRATION_POLICY_SCHEME, liveIntegrationPolicyDocs),
 
     vscode.commands.registerCommand('elasticSource.refresh', () => refresh()),
 
@@ -243,9 +237,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand(
       'elasticSource.openLiveIntegrationPolicy',
-      async (args: { connectionName: string; policy: FleetPackagePolicy }) => {
-        const uri = liveIntegrationPolicyDocs.uriFor(args.connectionName, args.policy);
-        await vscode.commands.executeCommand('markdown.showPreview', uri);
+      (args: { connectionName: string; agentPolicyName: string; policy: FleetPackagePolicy }) => {
+        LiveIntegrationPolicyViewPanel.open(
+          context.extensionUri,
+          args.connectionName,
+          args.agentPolicyName,
+          args.policy
+        );
       }
     ),
 

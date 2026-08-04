@@ -1,5 +1,6 @@
 (function () {
   const vscode = acquireVsCodeApi();
+  const render = window.IntegrationPolicyRender;
 
   const form = document.getElementById('form');
   const nameField = document.getElementById('name');
@@ -19,159 +20,6 @@
   let currentOutputId = null;
   let currentVars = {};
 
-  function slug(value) {
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
-  }
-
-  function inputEnabledId(input) {
-    return `inp_enabled__${slug(input.id)}`;
-  }
-  function inputVarId(input, field) {
-    return `inp_var__${slug(input.id)}__${slug(field.key)}`;
-  }
-  function streamEnabledId(input, stream) {
-    return `str_enabled__${slug(input.id)}__${slug(stream.id)}`;
-  }
-  function streamVarId(input, stream, field) {
-    return `str_var__${slug(input.id)}__${slug(stream.id)}__${slug(field.key)}`;
-  }
-
-  function fieldControlHtml(field, id) {
-    const label = field.required ? `${field.label} *` : field.label;
-    const errorSpan = '<span class="error">This field is required.</span>';
-    switch (field.type) {
-      case 'boolean':
-        return `<div class="field" id="field-${id}">
-          <div class="checkbox-row"><input type="checkbox" id="${id}" /><label for="${id}" style="margin:0">${label}</label></div>
-        </div>`;
-      case 'number':
-        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><input type="number" id="${id}" />${errorSpan}</div>`;
-      case 'multiline':
-        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea>${errorSpan}</div>`;
-      case 'stringArray':
-        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><textarea id="${id}"></textarea><span class="hint">One value per line.</span>${errorSpan}</div>`;
-      case 'select': {
-        const options = (field.options || [])
-          .map((o) => `<option value="${o.value}">${o.label}</option>`)
-          .join('');
-        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><select id="${id}">${options}</select>${errorSpan}</div>`;
-      }
-      case 'string':
-      default:
-        return `<div class="field" id="field-${id}"><label for="${id}">${label}</label><input type="text" id="${id}" />${errorSpan}</div>`;
-    }
-  }
-
-  function streamHtml(input, stream) {
-    const enabledId = streamEnabledId(input, stream);
-    const varsHtml = stream.vars.map((f) => fieldControlHtml(f, streamVarId(input, stream, f))).join('');
-    return `<details class="integration-stream" open>
-      <summary class="integration-summary"><input type="checkbox" id="${enabledId}" /><span>${stream.label}</span></summary>
-      <div class="stream-body">${varsHtml}</div>
-    </details>`;
-  }
-
-  function inputHtml(input) {
-    const enabledId = inputEnabledId(input);
-    const varsHtml = (input.vars || []).map((f) => fieldControlHtml(f, inputVarId(input, f))).join('');
-    const streamsHtml = input.streams.map((s) => streamHtml(input, s)).join('');
-    return `<details class="integration-input" open>
-      <summary class="integration-summary"><input type="checkbox" id="${enabledId}" /><strong>${input.label}</strong></summary>
-      <div class="input-body">${varsHtml}${streamsHtml}</div>
-    </details>`;
-  }
-
-  function renderTemplate(template) {
-    inputsContainer.innerHTML = template.inputs.map(inputHtml).join('');
-    // Prevent a click on a checkbox from also toggling the enclosing <details>.
-    inputsContainer.querySelectorAll('input[type="checkbox"]').forEach((el) => {
-      el.addEventListener('click', (e) => e.stopPropagation());
-    });
-  }
-
-  function setControlValue(id, type, value) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    switch (type) {
-      case 'boolean':
-        el.checked = Boolean(value);
-        break;
-      case 'stringArray':
-        el.value = Array.isArray(value) ? value.join('\n') : '';
-        break;
-      default:
-        el.value = value === undefined || value === null ? '' : String(value);
-    }
-  }
-
-  function getControlValue(id, type) {
-    const el = document.getElementById(id);
-    if (!el) return undefined;
-    switch (type) {
-      case 'boolean':
-        return el.checked;
-      case 'number': {
-        const n = Number(el.value);
-        return Number.isFinite(n) ? n : 0;
-      }
-      case 'stringArray':
-        return el.value
-          .split('\n')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-      default:
-        return el.value;
-    }
-  }
-
-  function populateValues(template, item) {
-    for (const input of template.inputs) {
-      const inputData = item.inputs[input.id];
-      document.getElementById(inputEnabledId(input)).checked = Boolean(inputData && inputData.enabled);
-      for (const field of input.vars || []) {
-        setControlValue(inputVarId(input, field), field.type, inputData && inputData.vars ? inputData.vars[field.key] : field.default);
-      }
-      for (const stream of input.streams) {
-        const streamData = inputData && inputData.streams ? inputData.streams[stream.id] : undefined;
-        document.getElementById(streamEnabledId(input, stream)).checked = Boolean(streamData && streamData.enabled);
-        for (const field of stream.vars) {
-          setControlValue(
-            streamVarId(input, stream, field),
-            field.type,
-            streamData && streamData.vars ? streamData.vars[field.key] : field.default
-          );
-        }
-      }
-    }
-  }
-
-  function collectInputs(template) {
-    const inputs = {};
-    for (const input of template.inputs) {
-      const vars = {};
-      for (const field of input.vars || []) {
-        vars[field.key] = getControlValue(inputVarId(input, field), field.type);
-      }
-      const streams = {};
-      for (const stream of input.streams) {
-        const streamVars = {};
-        for (const field of stream.vars) {
-          streamVars[field.key] = getControlValue(streamVarId(input, stream, field), field.type);
-        }
-        streams[stream.id] = {
-          enabled: document.getElementById(streamEnabledId(input, stream)).checked,
-          vars: streamVars,
-        };
-      }
-      inputs[input.id] = {
-        enabled: document.getElementById(inputEnabledId(input)).checked,
-        vars,
-        streams,
-      };
-    }
-    return inputs;
-  }
-
   function isEmptyValue(value) {
     if (value === undefined || value === null) return true;
     if (Array.isArray(value)) return value.length === 0;
@@ -185,7 +33,7 @@
     for (const input of template.inputs) {
       const inputVal = inputs[input.id];
       for (const field of input.vars || []) {
-        const id = inputVarId(input, field);
+        const id = render.inputVarId(input, field);
         const invalid = Boolean(field.required && inputVal.enabled && isEmptyValue(inputVal.vars[field.key]));
         setFieldValid(id, !invalid);
         if (invalid && !firstInvalidId) firstInvalidId = id;
@@ -193,7 +41,7 @@
       for (const stream of input.streams) {
         const streamVal = inputVal.streams[stream.id];
         for (const field of stream.vars) {
-          const id = streamVarId(input, stream, field);
+          const id = render.streamVarId(input, stream, field);
           const invalid = Boolean(
             field.required && inputVal.enabled && streamVal.enabled && isEmptyValue(streamVal.vars[field.key])
           );
@@ -238,8 +86,8 @@
       subtitle.textContent = `Defines the inputs for a ${payload.template.title} integration attached to this agent policy.`;
       packageDisplay.value = `${payload.template.title} (v${payload.template.version})`;
 
-      renderTemplate(payload.template);
-      populateValues(payload.template, payload.item);
+      render.renderTemplate(inputsContainer, payload.template, false);
+      render.populateValues(payload.template, payload.item);
     } else {
       const pkg = payload.item.package || {};
       subtitle.textContent = 'Structured editing is not available for this integration; edit the inputs as raw JSON below.';
@@ -280,7 +128,7 @@
     }
 
     if (currentTemplate) {
-      const inputs = collectInputs(currentTemplate);
+      const inputs = render.collectInputs(currentTemplate);
       const firstInvalidId = validateRequired(currentTemplate, inputs);
       if (firstInvalidId) {
         showError('Fill in the required fields highlighted below.');

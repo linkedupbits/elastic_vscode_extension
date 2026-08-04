@@ -805,7 +805,11 @@ describe('ElasticTreeProvider', () => {
         expect(integrationItems[0].liveIntegrationPolicy).toEqual(packagePolicy);
         const command = integrationItems[0].command as unknown as { command: string; arguments: unknown[] };
         expect(command.command).toBe('elasticSource.openLiveIntegrationPolicy');
-        expect(command.arguments[0]).toEqual({ connectionName: 'Staging', policy: packagePolicy });
+        expect(command.arguments[0]).toEqual({
+          connectionName: 'Staging',
+          agentPolicyName: 'CMT Default',
+          policy: packagePolicy,
+        });
       });
 
       it('assigns an integration policy that references the agent policy only via policy_ids', async () => {

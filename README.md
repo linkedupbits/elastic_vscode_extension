@@ -73,9 +73,10 @@ none of it is saved locally unless you explicitly download it:
   API - concurrently with the agent policies, so neither request blocks the other - and assigns
   each one to the agent policy/policies it belongs to (matching Fleet's own `policy_id`/
   `policy_ids` fields), nesting them as expandable children under their owning agent policy.
-  Opening one of these Integration Policies shows a read-only "virtual document" - a markdown
-  rendering of its structured input/stream/var screen (the same layout the editable form uses),
-  opened in VS Code's Markdown Preview rather than a webview panel.
+  Opening one of these Integration Policies shows a read-only structured view - the same
+  input/stream/var screen the editable form uses, rendered by the same client-side code, just
+  with every control disabled and no Save button, for a consistent look between viewing a live
+  policy and editing a downloaded one.
 
 Each live Space, Fleet Agent Policy or Integration Policy has a **Download to Project** action
 that saves it as a normal local artifact under `Spaces/`/`Fleet_Agent_Policies/`/

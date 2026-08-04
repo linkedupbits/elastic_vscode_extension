@@ -351,7 +351,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         command: {
           command: 'elasticSource.openLiveIntegrationPolicy',
           title: 'Open',
-          arguments: [{ connectionName, policy }],
+          arguments: [{ connectionName, agentPolicyName: element.liveAgentPolicy?.name ?? '', policy }],
         },
       });
     });
