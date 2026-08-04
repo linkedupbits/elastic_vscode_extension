@@ -238,3 +238,32 @@ export interface SpaceDefinition {
   imageUrl?: string;
   disabledFeatures?: string[];
 }
+
+/**
+ * Body shape of the Elasticsearch Put Snapshot Lifecycle Policy API
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-slm-put-lifecycle).
+ * Maps directly onto the real API body - there's no wrapper key in the request itself - except
+ * for `policyId`, which isn't part of the body (it's the URL path segment, `policy_id`) but is
+ * kept here since it drives the saved file name and (per `SnapshotPolicyFile` below) the saved
+ * file's root JSON key. Note the real API body's own `name` field is the (optionally
+ * date-math-templated) name given to each snapshot the policy creates - it is not the policy's
+ * own identifier, which is `policyId` instead. `config` and `retention` are left free-form:
+ * their own sub-fields (`indices`, `ignore_unavailable`, `include_global_state`,
+ * `feature_states`, `partial`, `metadata` / `expire_after`, `min_count`, `max_count`
+ * respectively) are still evolving, so it isn't practical to curate as structured fields here.
+ */
+export interface SnapshotPolicyDefinition {
+  policyId: string;
+  schedule: string;
+  name: string;
+  repository: string;
+  config?: Record<string, unknown>;
+  retention?: Record<string, unknown>;
+}
+
+/**
+ * On-disk shape of a Snapshot Policy file. The policy id is stored as the single root JSON
+ * key rather than a `policyId` field, matching the Role/Role Mapping wrapper convention used
+ * elsewhere in this project.
+ */
+export type SnapshotPolicyFile = Record<string, Omit<SnapshotPolicyDefinition, 'policyId'>>;

@@ -8,6 +8,7 @@ import {
   getIngestPipelinesDir,
   getRoleMappingsDir,
   getRolesDir,
+  getSnapshotPoliciesDir,
   getSpacesDir,
 } from './config';
 import {
@@ -35,6 +36,8 @@ import {
   RoleFile,
   RoleMappingDefinition,
   RoleMappingFile,
+  SnapshotPolicyDefinition,
+  SnapshotPolicyFile,
   SpaceDefinition,
 } from './models';
 
@@ -73,17 +76,25 @@ function assertHasName<T extends { name: string }>(data: T, filePath: string): v
   }
 }
 
-/** Sorts loaded artifacts by name, falling back to the file name for any that failed to load. */
-function sortArtifacts<T extends { name: string }>(items: ArtifactResult<T>[]): ArtifactResult<T>[] {
-  const sortKey = (item: ArtifactResult<T>): string =>
-    isLoadedArtifact(item) ? item.data.name : path.basename(item.filePath);
-  return items.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+/**
+ * Sorts loaded artifacts by `sortKey(data)` (by name, unless overridden - e.g. Snapshot
+ * Policies sort by `policyId` since their body's own `name` field means something else),
+ * falling back to the file name for any that failed to load.
+ */
+function sortArtifacts<T extends { name: string }>(
+  items: ArtifactResult<T>[],
+  sortKey: (data: T) => string = (data) => data.name
+): ArtifactResult<T>[] {
+  const key = (item: ArtifactResult<T>): string =>
+    isLoadedArtifact(item) ? sortKey(item.data) : path.basename(item.filePath);
+  return items.sort((a, b) => key(a).localeCompare(key(b)));
 }
 
 /** Reads each file with `load`, catching per-file errors instead of letting one bad file fail the whole list. */
 async function loadArtifacts<T extends { name: string }>(
   files: string[],
-  load: (filePath: string) => Promise<T>
+  load: (filePath: string) => Promise<T>,
+  sortKey?: (data: T) => string
 ): Promise<ArtifactResult<T>[]> {
   const items = await Promise.all(
     files.map(async (filePath): Promise<ArtifactResult<T>> => {
@@ -96,30 +107,40 @@ async function loadArtifacts<T extends { name: string }>(
       }
     })
   );
-  return sortArtifacts(items);
+  return sortArtifacts(items, sortKey);
 }
 
 /**
  * Unwraps a file whose shape mirrors Elasticsearch's own "Get" API response - a single root
- * key holding the artifact's name, its value the rest of the definition (used by Roles and
- * Role Mappings; see `RoleFile`/`RoleMappingFile`).
+ * key holding the artifact's identifier, its value the rest of the definition (used by Roles,
+ * Role Mappings and Snapshot Policies; see `RoleFile`/`RoleMappingFile`/`SnapshotPolicyFile`).
+ * `keyField` is the property the root key is unwrapped into - usually `name`, but e.g. Snapshot
+ * Policies use `policyId` since their body already has its own unrelated `name` field.
  */
-function fromNamedWrapperFile<T>(file: Record<string, T>, filePath: string, kind: string): { name: string } & T {
+function fromNamedWrapperFile<T, K extends string>(
+  file: Record<string, T>,
+  filePath: string,
+  kind: string,
+  keyField: K
+): { [P in K]: string } & T {
   const entries = Object.entries(file);
   if (entries.length !== 1) {
     throw new Error(`"${path.basename(filePath)}" must have exactly one root key (the ${kind} name).`);
   }
-  const [name, definition] = entries[0];
+  const [key, definition] = entries[0];
   if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
-    throw new Error(`"${path.basename(filePath)}" - the value of "${name}" must be a JSON object.`);
+    throw new Error(`"${path.basename(filePath)}" - the value of "${key}" must be a JSON object.`);
   }
-  return { name, ...definition };
+  return { [keyField]: key, ...definition } as { [P in K]: string } & T;
 }
 
-/** Wraps a `{ name, ...definition }` value back into its named-root-key on-disk shape. */
-function toNamedWrapperFile<T extends { name: string }>(data: T): Record<string, Omit<T, 'name'>> {
-  const { name, ...definition } = data;
-  return { [name]: definition } as Record<string, Omit<T, 'name'>>;
+/** Wraps a value back into its named-root-key on-disk shape, keyed by `data[keyField]`. */
+function toNamedWrapperFile<T extends object, K extends keyof T & string>(
+  data: T,
+  keyField: K
+): Record<string, Omit<T, K>> {
+  const { [keyField]: key, ...definition } = data as Record<string, unknown>;
+  return { [key as string]: definition } as Record<string, Omit<T, K>>;
 }
 
 export class ArtifactConflictError extends Error {}
@@ -418,7 +439,7 @@ export async function deleteIndexTemplate(filePath: string): Promise<void> {
 // rather than as a `name` field in the body - see `RoleFile`.
 
 export async function loadRole(filePath: string): Promise<RoleDefinition> {
-  return fromNamedWrapperFile(await readJsonFile<RoleFile>(filePath), filePath, 'role');
+  return fromNamedWrapperFile(await readJsonFile<RoleFile>(filePath), filePath, 'role', 'name');
 }
 
 export async function listRoles(): Promise<ArtifactResult<RoleDefinition>[]> {
@@ -437,7 +458,7 @@ export async function saveRole(existingFilePath: string | undefined, data: RoleD
     throw new ArtifactConflictError(`A Role named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, toNamedWrapperFile(data));
+  await writeJsonFile(targetFile, toNamedWrapperFile(data, 'name'));
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }
@@ -454,7 +475,7 @@ export async function deleteRole(filePath: string): Promise<void> {
 // response shape) rather than as a `name` field in the body - see `RoleMappingFile`.
 
 export async function loadRoleMapping(filePath: string): Promise<RoleMappingDefinition> {
-  return fromNamedWrapperFile(await readJsonFile<RoleMappingFile>(filePath), filePath, 'role mapping');
+  return fromNamedWrapperFile(await readJsonFile<RoleMappingFile>(filePath), filePath, 'role mapping', 'name');
 }
 
 export async function listRoleMappings(): Promise<ArtifactResult<RoleMappingDefinition>[]> {
@@ -476,7 +497,7 @@ export async function saveRoleMapping(
     throw new ArtifactConflictError(`A Role Mapping named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, toNamedWrapperFile(data));
+  await writeJsonFile(targetFile, toNamedWrapperFile(data, 'name'));
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }
@@ -515,5 +536,49 @@ export async function saveSpace(existingFilePath: string | undefined, data: Spac
 }
 
 export async function deleteSpace(filePath: string): Promise<void> {
+  await deleteFile(filePath);
+}
+
+// ---------- Snapshot Policies ----------
+// Each lives as a *.json file named after its own `policyId`. On disk, the policy id is
+// stored as the file's root JSON key (the real API takes it from the URL path, not the body)
+// rather than as a `policyId` field in the body - see `SnapshotPolicyFile`.
+
+export async function loadSnapshotPolicy(filePath: string): Promise<SnapshotPolicyDefinition> {
+  return fromNamedWrapperFile(
+    await readJsonFile<SnapshotPolicyFile>(filePath),
+    filePath,
+    'snapshot policy',
+    'policyId'
+  );
+}
+
+export async function listSnapshotPolicies(): Promise<ArtifactResult<SnapshotPolicyDefinition>[]> {
+  const files = await listJsonFiles(getSnapshotPoliciesDir());
+  return loadArtifacts(files, loadSnapshotPolicy, (data) => data.policyId);
+}
+
+/**
+ * Creates or updates a Snapshot Policy. If the policy id changed on an existing policy, the
+ * json file is renamed to match.
+ */
+export async function saveSnapshotPolicy(
+  existingFilePath: string | undefined,
+  data: SnapshotPolicyDefinition
+): Promise<string> {
+  const targetFile = path.join(getSnapshotPoliciesDir(), `${data.policyId}.json`);
+
+  if (targetFile !== existingFilePath && (await pathExists(targetFile))) {
+    throw new ArtifactConflictError(`A Snapshot Policy with id "${data.policyId}" already exists.`);
+  }
+
+  await writeJsonFile(targetFile, toNamedWrapperFile(data, 'policyId'));
+  if (existingFilePath && existingFilePath !== targetFile) {
+    await deleteFile(existingFilePath);
+  }
+  return targetFile;
+}
+
+export async function deleteSnapshotPolicy(filePath: string): Promise<void> {
   await deleteFile(filePath);
 }

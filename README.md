@@ -41,6 +41,7 @@ All artifacts live under a single project root folder (`Elastic_Source` by defau
 | `Roles/` | Security Roles | [Put Role](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role) |
 | `Role_Mappings/` | Security Role Mappings | [Put Role Mapping](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role-mapping) |
 | `Spaces/` | Kibana Spaces | [Create Space](https://www.elastic.co/docs/api/doc/kibana/operation/operation-post-spaces-space) |
+| `SnapshotPolicies/` | Snapshot Lifecycle Management Policies | [Put Snapshot Lifecycle Policy](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-slm-put-lifecycle) |
 
 Each JSON file is named after the artifact's own `name` (or, for Agent Policies, the owning
 folder name too) and maps directly onto the request body of the linked API, with `name`

@@ -11,6 +11,7 @@ import {
   saveIntegrationPolicy,
   saveRole,
   saveRoleMapping,
+  saveSnapshotPolicy,
   saveSpace,
 } from '../../src/repositories';
 import { ElasticTreeProvider } from '../../src/treeView/elasticTreeProvider';
@@ -51,6 +52,7 @@ describe('ElasticTreeProvider', () => {
         'category-roles',
         'category-rolemappings',
         'category-spaces',
+        'category-snapshotpolicies',
       ]);
     });
 
@@ -74,6 +76,7 @@ describe('ElasticTreeProvider', () => {
         'category-roles',
         'category-rolemappings',
         'category-spaces',
+        'category-snapshotpolicies',
       ]);
       expect(children.map((c) => c.label)).toEqual([
         'Fleet Proxies',
@@ -85,6 +88,7 @@ describe('ElasticTreeProvider', () => {
         'Roles',
         'Role Mappings',
         'Spaces',
+        'Snapshot Policies',
       ]);
       // TreeItemCollapsibleState.Collapsed === 1 in both the mock and the real vscode API
       expect(children.every((c) => c.collapsibleState === 1)).toBe(true);
@@ -517,6 +521,35 @@ describe('ElasticTreeProvider', () => {
       const command = item.command as unknown as { command: string; arguments: unknown[] };
       expect(command.command).toBe('elasticSource.openArtifact');
       expect(command.arguments[0]).toEqual({ artifactType: 'space', filePath: item.filePath });
+    });
+  });
+
+  describe('Snapshot Policies category', () => {
+    it('is empty when no snapshot policies exist', async () => {
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-snapshotpolicies')!;
+      expect(await provider.getChildren(category)).toEqual([]);
+    });
+
+    it('shows the policy id as label and the schedule as description', async () => {
+      await saveSnapshotPolicy(undefined, {
+        policyId: 'daily-snapshots',
+        schedule: '0 30 1 * * ?',
+        name: '<daily-snap-{now/d}>',
+        repository: 'my_repository',
+      });
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-snapshotpolicies')!;
+      const [item] = await provider.getChildren(category);
+
+      expect(item.label).toBe('daily-snapshots');
+      expect(item.contextValue).toBe('snapshotpolicy');
+      expect(item.artifactType).toBe('snapshotpolicy');
+      expect(item.description).toBe('0 30 1 * * ?');
+      const command = item.command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openArtifact');
+      expect(command.arguments[0]).toEqual({ artifactType: 'snapshotpolicy', filePath: item.filePath });
     });
   });
 

@@ -10,7 +10,8 @@ export type ArtifactType =
   | 'indextemplate'
   | 'role'
   | 'rolemapping'
-  | 'space';
+  | 'space'
+  | 'snapshotpolicy';
 
 export class ElasticTreeItem extends vscode.TreeItem {
   constructor(

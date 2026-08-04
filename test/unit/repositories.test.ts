@@ -11,6 +11,7 @@ import {
   IntegrationPolicy,
   RoleDefinition,
   RoleMappingDefinition,
+  SnapshotPolicyDefinition,
   SpaceDefinition,
 } from '../../src/models';
 import {
@@ -25,6 +26,7 @@ import {
   deleteIntegrationPolicy,
   deleteRole,
   deleteRoleMapping,
+  deleteSnapshotPolicy,
   deleteSpace,
   getFleetDownloadSourceRefs,
   getFleetProxyRefs,
@@ -39,6 +41,7 @@ import {
   listIntegrationPolicies,
   listRoleMappings,
   listRoles,
+  listSnapshotPolicies,
   listSpaces,
   LoadedArtifact,
   saveFleetAgentPolicy,
@@ -50,6 +53,7 @@ import {
   saveIntegrationPolicy,
   saveRole,
   saveRoleMapping,
+  saveSnapshotPolicy,
   saveSpace,
 } from '../../src/repositories';
 import { makeTempDir, removeTempDir } from '../helpers/tempDir';
@@ -155,6 +159,16 @@ function spaceFixture(overrides: Partial<SpaceDefinition> = {}): SpaceDefinition
   return {
     id: 'marketing',
     name: 'Marketing',
+    ...overrides,
+  };
+}
+
+function snapshotPolicyFixture(overrides: Partial<SnapshotPolicyDefinition> = {}): SnapshotPolicyDefinition {
+  return {
+    policyId: 'daily-snapshots',
+    schedule: '0 30 1 * * ?',
+    name: '<daily-snap-{now/d}>',
+    repository: 'my_repository',
     ...overrides,
   };
 }
@@ -974,6 +988,85 @@ describe('repositories', () => {
     it('deletes a space file', async () => {
       const filePath = await saveSpace(undefined, spaceFixture());
       await deleteSpace(filePath);
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+  });
+
+  // ---------- Snapshot Policies ----------
+
+  describe('Snapshot Policies', () => {
+    it('saves a new snapshot policy as <policyId>.json, wrapped under the policy id key', async () => {
+      const filePath = await saveSnapshotPolicy(undefined, snapshotPolicyFixture());
+      expect(filePath).toBe(path.join(workspaceRoot, 'Elastic_Source', 'SnapshotPolicies', 'daily-snapshots.json'));
+      expect(fs.existsSync(filePath)).toBe(true);
+
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(Object.keys(raw)).toEqual(['daily-snapshots']);
+      expect(raw['daily-snapshots']).toEqual({
+        schedule: '0 30 1 * * ?',
+        name: '<daily-snap-{now/d}>',
+        repository: 'my_repository',
+      });
+    });
+
+    it('lists saved snapshot policies sorted by policy id (not the unrelated body "name" field)', async () => {
+      await saveSnapshotPolicy(undefined, snapshotPolicyFixture({ policyId: 'zeta-policy', name: 'zzz' }));
+      await saveSnapshotPolicy(undefined, snapshotPolicyFixture({ policyId: 'alpha-policy', name: 'aaa' }));
+
+      const policies = expectAllLoaded(await listSnapshotPolicies());
+      expect(policies.map((p) => p.data.policyId)).toEqual(['alpha-policy', 'zeta-policy']);
+    });
+
+    it('returns [] when the SnapshotPolicies folder does not exist yet', async () => {
+      expect(await listSnapshotPolicies()).toEqual([]);
+    });
+
+    it('renames the file when an existing policy is saved under a new policy id', async () => {
+      const original = snapshotPolicyFixture();
+      const originalPath = await saveSnapshotPolicy(undefined, original);
+
+      const renamedPath = await saveSnapshotPolicy(originalPath, { ...original, policyId: 'renamed-policy' });
+
+      expect(renamedPath).toBe(
+        path.join(workspaceRoot, 'Elastic_Source', 'SnapshotPolicies', 'renamed-policy.json')
+      );
+      expect(fs.existsSync(originalPath)).toBe(false);
+      expect(fs.existsSync(renamedPath)).toBe(true);
+    });
+
+    it('updating a policy without changing its policy id overwrites the same file (no duplicate)', async () => {
+      const original = snapshotPolicyFixture();
+      const originalPath = await saveSnapshotPolicy(undefined, original);
+
+      const resavedPath = await saveSnapshotPolicy(originalPath, { ...original, repository: 'other_repo' });
+
+      expect(resavedPath).toBe(originalPath);
+      expect((await listSnapshotPolicies()).length).toBe(1);
+    });
+
+    it('rejects saving a policy whose policy id collides with a different existing policy', async () => {
+      await saveSnapshotPolicy(undefined, snapshotPolicyFixture({ policyId: 'taken-id' }));
+
+      await expect(
+        saveSnapshotPolicy(undefined, snapshotPolicyFixture({ policyId: 'taken-id' }))
+      ).rejects.toBeInstanceOf(ArtifactConflictError);
+    });
+
+    it('persists optional config/retention fields', async () => {
+      const full = snapshotPolicyFixture({
+        config: { indices: ['data-*'], ignore_unavailable: false, include_global_state: false },
+        retention: { expire_after: '30d', min_count: 5, max_count: 50 },
+      });
+      const filePath = await saveSnapshotPolicy(undefined, full);
+
+      const [saved] = expectAllLoaded(await listSnapshotPolicies());
+      expect(saved.filePath).toBe(filePath);
+      expect(saved.data).toEqual(full);
+    });
+
+    it('deletes a snapshot policy file', async () => {
+      const filePath = await saveSnapshotPolicy(undefined, snapshotPolicyFixture());
+      await deleteSnapshotPolicy(filePath);
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });

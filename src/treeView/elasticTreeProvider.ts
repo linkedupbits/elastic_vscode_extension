@@ -13,6 +13,7 @@ import {
   listIntegrationPolicies,
   listRoleMappings,
   listRoles,
+  listSnapshotPolicies,
   listSpaces,
 } from '../repositories';
 import { ElasticTreeItem } from './elasticTreeItem';
@@ -63,6 +64,11 @@ const CATEGORIES = [
     label: 'Spaces',
     icon: 'symbol-namespace',
   },
+  {
+    id: 'category-snapshotpolicies',
+    label: 'Snapshot Policies',
+    icon: 'archive',
+  },
 ] as const;
 
 export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeItem> {
@@ -108,6 +114,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           return await this.getRoleMappingItems();
         case 'category-spaces':
           return await this.getSpaceItems();
+        case 'category-snapshotpolicies':
+          return await this.getSnapshotPolicyItems();
         case 'agentpolicy':
           return await this.getIntegrationPolicyItems(element.filePath as string);
         default:
@@ -336,6 +344,28 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
           command: 'elasticSource.openArtifact',
           title: 'Open',
           arguments: [{ artifactType: 'space', filePath }],
+        },
+      });
+    });
+  }
+
+  private async getSnapshotPolicyItems(): Promise<ElasticTreeItem[]> {
+    const policies = await listSnapshotPolicies();
+    return policies.map((item) => {
+      if (!isLoadedArtifact(item)) {
+        return this.buildErrorItem(item);
+      }
+      const { filePath, data } = item;
+      return new ElasticTreeItem(data.policyId, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'snapshotpolicy',
+        iconPath: new vscode.ThemeIcon('archive'),
+        description: data.schedule,
+        filePath,
+        artifactType: 'snapshotpolicy',
+        command: {
+          command: 'elasticSource.openArtifact',
+          title: 'Open',
+          arguments: [{ artifactType: 'snapshotpolicy', filePath }],
         },
       });
     });

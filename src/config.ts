@@ -58,3 +58,7 @@ export function getRoleMappingsDir(): string {
 export function getSpacesDir(): string {
   return path.join(getElasticSourceRoot(), 'Spaces');
 }
+
+export function getSnapshotPoliciesDir(): string {
+  return path.join(getElasticSourceRoot(), 'SnapshotPolicies');
+}

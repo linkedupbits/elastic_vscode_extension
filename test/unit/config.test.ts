@@ -9,6 +9,7 @@ import {
   getIngestPipelinesDir,
   getRoleMappingsDir,
   getRolesDir,
+  getSnapshotPoliciesDir,
   getSpacesDir,
   NoWorkspaceError,
 } from '../../src/config';
@@ -87,6 +88,10 @@ describe('config', () => {
       expect(getSpacesDir()).toBe(path.join('/ws', 'Elastic_Source', 'Spaces'));
     });
 
+    it('getSnapshotPoliciesDir', () => {
+      expect(getSnapshotPoliciesDir()).toBe(path.join('/ws', 'Elastic_Source', 'SnapshotPolicies'));
+    });
+
     it('each helper propagates NoWorkspaceError when the workspace closes', () => {
       __resetWorkspace();
       expect(() => getFleetProxiesDir()).toThrow(NoWorkspaceError);
@@ -98,6 +103,7 @@ describe('config', () => {
       expect(() => getRolesDir()).toThrow(NoWorkspaceError);
       expect(() => getRoleMappingsDir()).toThrow(NoWorkspaceError);
       expect(() => getSpacesDir()).toThrow(NoWorkspaceError);
+      expect(() => getSnapshotPoliciesDir()).toThrow(NoWorkspaceError);
     });
   });
 });

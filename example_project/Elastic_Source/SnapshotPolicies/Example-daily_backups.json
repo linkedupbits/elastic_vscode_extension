@@ -1,33 +1,21 @@
 {
   "Example-daily_backups": {
-    "version": 4,
-    "modified_date_millis": 1725835513422,
-    "policy": {
-      "name": "<example-daily_backups-{now/d}>",
-      "schedule": "0 0 1 * * ?",
-      "repository": "found-snapshots",
-      "config": {
-        "indices": [
-          ".kibana-*"
-        ],
-        "feature_states": [],
-        "ignore_unavailable": true,
-        "include_global_state": false,
-        "partial": true
-      },
-      "retention": {
-        "expire_after": "7d",
-        "min_count": 7,
-        "max_count": 10
-      }
+    "schedule": "0 0 1 * * ?",
+    "name": "<example-daily_backups-{now/d}>",
+    "repository": "found-snapshots",
+    "config": {
+      "indices": [
+        ".kibana-*"
+      ],
+      "feature_states": [],
+      "ignore_unavailable": true,
+      "include_global_state": false,
+      "partial": true
     },
-    "next_execution_millis": 1725843600000,
-    "stats": {
-      "policy": "Example-daily_backups",
-      "snapshots_taken": 0,
-      "snapshots_failed": 0,
-      "snapshots_deleted": 0,
-      "snapshot_deletion_failures": 0
+    "retention": {
+      "expire_after": "7d",
+      "min_count": 7,
+      "max_count": 10
     }
   }
 }

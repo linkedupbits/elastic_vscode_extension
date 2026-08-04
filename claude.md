@@ -321,3 +321,30 @@ The structure of the json follows the request body of the [Create Space API](htt
 * **Name** is a required free-text field for the space's display label in Kibana; unlike every other artifact type in this project, it doesn't drive the file name.
 * **Description**, **Color**, **Initials** and **Avatar Image URL** are all optional free-text fields; **Color** and **Initials** are validated client-side (a `#rrggbb` hex value, and at most 2 characters, respectively) to match Kibana's own constraints.
 * **Disabled Features** (`disabledFeatures`) is an optional newline-separated list of Kibana feature ids, mirroring the stringArray convention used elsewhere in this project, since the set of registered feature ids is plugin-defined and open-ended.
+
+`/Elastic_Source/SnapshotPolicies/` - this folder contains a set of json files, each of which defines an Elasticsearch Snapshot Lifecycle Management (SLM) policy. Each policy is defined in a json file named the same as its policy id, eg `/Elastic_Source/SnapshotPolicies/daily-snapshots.json`.
+
+The structure of the json follows this project's named-wrapper convention (the same one used by Roles and Role Mappings): the policy id is the single root JSON key, and its value is exactly the request body of the [Put Snapshot Lifecycle Policy API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-slm-put-lifecycle) (the API itself takes the policy id from the URL path, not the body). Note the body's own `name` field is unrelated to the policy id - it's the (optionally date-math-templated) name given to each snapshot the policy creates, e.g. `<daily-snap-{now/d}>`:
+```json
+{
+  "daily-snapshots": {
+    "schedule": "0 30 1 * * ?",
+    "name": "<daily-snap-{now/d}>",
+    "repository": "my_repository",
+    "config": {
+      "indices": ["data-*"],
+      "ignore_unavailable": false,
+      "include_global_state": false
+    },
+    "retention": {
+      "expire_after": "30d",
+      "min_count": 5,
+      "max_count": 50
+    }
+  }
+}
+```
+* The file name must be the same as the root JSON key (the policy id) - deliberately not called `name` in the form/model here, to avoid confusion with the body's own unrelated `name` field.
+* **Policy ID**, **Schedule** and **Repository** are required free-text fields; **Policy ID** is validated client-side as a valid file name, the same rule used for every other file-name-driving field in this project.
+* **Snapshot Name** (`name`) is a required free-text field - the (optionally templated) name given to each snapshot taken by this policy.
+* **Config** (`config`) and **Retention** (`retention`) both remain free-form optional JSON editors, since their own sub-fields (`indices`/`ignore_unavailable`/`include_global_state`/`feature_states`/`partial`/`metadata` and `expire_after`/`min_count`/`max_count` respectively) are still evolving, the same rationale used for ILM policy phases elsewhere in this project.
