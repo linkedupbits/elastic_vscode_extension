@@ -146,6 +146,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         case 'connection-spaces':
           return await this.getLiveSpaceItems(element);
         case 'connection-agentpolicies':
+          return await this.getLiveAgentPolicySpaceItems(element);
+        case 'connection-agentpolicies-space':
           return await this.getLiveAgentPolicyItems(element);
         case 'connection-agentpolicy':
           return this.getLiveIntegrationPolicyItems(element);
@@ -283,17 +285,42 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
   }
 
   /**
+   * Children of the "Fleet Agent Policies" node: one entry per Kibana Space enumerated via
+   * `fetchSpaces`, so Agent Policies can be browsed per-space (the same policy may appear under
+   * more than one space, since Fleet agent policies aren't confined to a single space). Each
+   * space node carries the connection's `filePath`/`connectionId` through so expanding it can
+   * re-resolve the connection's API key, plus the fetched `SpaceDefinition` itself so the
+   * space-aware Agent Policy API can be scoped to it.
+   */
+  private async getLiveAgentPolicySpaceItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
+    return this.getLiveItems(element, 'spaces', fetchSpaces, (space) => {
+      return new ElasticTreeItem(space.name, vscode.TreeItemCollapsibleState.Collapsed, {
+        contextValue: 'connection-agentpolicies-space',
+        iconPath: new vscode.ThemeIcon('symbol-namespace'),
+        description: space.id,
+        filePath: element.filePath,
+        connectionId: element.connectionId,
+        liveSpace: space,
+      });
+    });
+  }
+
+  /**
    * Fetches agent policies and integration (package) policies concurrently, so downloading the
    * (usually larger) integration policy list never blocks the agent policy list from appearing.
-   * Each integration policy is then assigned client-side to the agent policy/policies it
-   * belongs to, via `policy_id`/inclusion in `policy_ids` - the same fields Fleet itself uses -
-   * and stashed on its `ElasticTreeItem` so expanding it later needs no further API call. If the
-   * integration policies fetch fails (e.g. missing Fleet permission), agent policies still show,
-   * just without any integration policy children.
+   * Both fetches are scoped to `element.liveSpace` (a `connection-agentpolicies-space` node) via
+   * the space-aware Fleet API, so the two lists always line up to the same space; the "default"
+   * space (or a missing `liveSpace`, defensively) resolves to the unscoped endpoint. Each
+   * integration policy is then assigned client-side to the agent policy/policies it belongs to,
+   * via `policy_id`/inclusion in `policy_ids` - the same fields Fleet itself uses - and stashed
+   * on its `ElasticTreeItem` so expanding it later needs no further API call. If the integration
+   * policies fetch fails (e.g. missing Fleet permission), agent policies still show, just
+   * without any integration policy children.
    */
   private async getLiveAgentPolicyItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
     const connectionFilePath = element.filePath as string;
     const connectionId = element.connectionId as string;
+    const spaceId = element.liveSpace?.id ?? 'default';
 
     const apiKey = await getApiKey(this.secrets, connectionId);
     if (!apiKey) {
@@ -304,8 +331,8 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
       const connection = await readJsonFile<ConnectionDefinition>(connectionFilePath);
       const { kibanaUrl } = decodeCloudId(connection.cloudId);
       const [policies, integrationPolicies] = await Promise.all([
-        fetchAgentPolicies(kibanaUrl, apiKey),
-        fetchPackagePolicies(kibanaUrl, apiKey).catch(() => [] as FleetPackagePolicy[]),
+        fetchAgentPolicies(kibanaUrl, apiKey, spaceId),
+        fetchPackagePolicies(kibanaUrl, apiKey, spaceId).catch(() => [] as FleetPackagePolicy[]),
       ]);
 
       return policies.map((policy) => {
@@ -320,6 +347,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
             iconPath: new vscode.ThemeIcon('checklist'),
             description: policy.namespace,
             connectionName: connection.name,
+            liveSpaceId: spaceId,
             liveAgentPolicy: policy,
             liveIntegrationPolicies: assigned,
             command: {
@@ -346,6 +374,7 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
         iconPath: new vscode.ThemeIcon('plug'),
         description: policy.package?.title,
         connectionName,
+        liveSpaceId: element.liveSpaceId,
         liveAgentPolicy: element.liveAgentPolicy,
         liveIntegrationPolicy: policy,
         command: {

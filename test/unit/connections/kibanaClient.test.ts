@@ -147,6 +147,40 @@ describe('fetchAgentPolicies', () => {
       'getaddrinfo ENOTFOUND'
     );
   });
+
+  it('prefixes the request with /s/<space_id> for a non-default space', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: [] }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await fetchAgentPolicies('https://example.kb.io', 'my-api-key', 'marketing');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.kb.io/s/marketing/api/fleet/agent_policies?perPage=100',
+      expect.anything()
+    );
+  });
+
+  it('does not prefix the request for the "default" space', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: [] }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await fetchAgentPolicies('https://example.kb.io', 'my-api-key', 'default');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.kb.io/api/fleet/agent_policies?perPage=100',
+      expect.anything()
+    );
+  });
 });
 
 describe('fetchPackagePolicies', () => {
@@ -230,6 +264,23 @@ describe('fetchPackagePolicies', () => {
 
     await expect(fetchPackagePolicies('https://example.kb.io', 'my-api-key')).rejects.toThrow(
       'getaddrinfo ENOTFOUND'
+    );
+  });
+
+  it('prefixes the request with /s/<space_id> for a non-default space', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: [] }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await fetchPackagePolicies('https://example.kb.io', 'my-api-key', 'marketing');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.kb.io/s/marketing/api/fleet/package_policies?perPage=100',
+      expect.anything()
     );
   });
 });

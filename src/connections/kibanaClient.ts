@@ -28,14 +28,37 @@ export async function fetchSpaces(kibanaUrl: string, apiKey: string): Promise<Sp
 }
 
 /**
+ * Prefixes `path` with Kibana's space-scoping URL segment
+ * (https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space), so a
+ * request is resolved against a specific space's saved objects rather than the deployment's
+ * default space. Kibana treats the default space as the unprefixed base path, so `'default'`
+ * (and `undefined`, for callers that aren't space-aware) is left unprefixed rather than
+ * rewritten to `/s/default`.
+ */
+function spaceScopedPath(path: string, spaceId?: string): string {
+  return spaceId && spaceId !== 'default' ? `/s/${spaceId}${path}` : path;
+}
+
+/**
  * Fetches the full list of Fleet Agent Policies from a connected deployment via the Get Agent
  * Policies API (https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-agent-policies).
  * Unlike the Spaces API, this one is paginated and wraps the list in an `items` envelope
  * alongside `total`/`page`/`perPage`; `perPage=100` is used to cover typical deployments in a
- * single request rather than implementing full pagination for this read-only tree view.
+ * single request rather than implementing full pagination for this read-only tree view. An
+ * agent policy can belong to more than one space, so `spaceId` scopes the request to the
+ * policies visible from that particular space (omit it, or pass `'default'`, for the
+ * deployment's default space).
  */
-export async function fetchAgentPolicies(kibanaUrl: string, apiKey: string): Promise<FleetAgentPolicy[]> {
-  const response = await kibanaGet(kibanaUrl, apiKey, '/api/fleet/agent_policies?perPage=100');
+export async function fetchAgentPolicies(
+  kibanaUrl: string,
+  apiKey: string,
+  spaceId?: string
+): Promise<FleetAgentPolicy[]> {
+  const response = await kibanaGet(
+    kibanaUrl,
+    apiKey,
+    spaceScopedPath('/api/fleet/agent_policies?perPage=100', spaceId)
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch agent policies (${response.status} ${response.statusText}).`);
@@ -50,10 +73,19 @@ export async function fetchAgentPolicies(kibanaUrl: string, apiKey: string): Pro
  * the Get Package Policies API (https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-package-policies).
  * Paginated like Agent Policies; `perPage=100` covers typical deployments in a single request.
  * Each item carries `policy_id`/`policy_ids`, which callers use to assign it to the agent
- * policy/policies it belongs to.
+ * policy/policies it belongs to. `spaceId` scopes the request the same way as
+ * `fetchAgentPolicies` - callers pass the same space to both so the two lists line up.
  */
-export async function fetchPackagePolicies(kibanaUrl: string, apiKey: string): Promise<FleetPackagePolicy[]> {
-  const response = await kibanaGet(kibanaUrl, apiKey, '/api/fleet/package_policies?perPage=100');
+export async function fetchPackagePolicies(
+  kibanaUrl: string,
+  apiKey: string,
+  spaceId?: string
+): Promise<FleetPackagePolicy[]> {
+  const response = await kibanaGet(
+    kibanaUrl,
+    apiKey,
+    spaceScopedPath('/api/fleet/package_policies?perPage=100', spaceId)
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch integration policies (${response.status} ${response.statusText}).`);
