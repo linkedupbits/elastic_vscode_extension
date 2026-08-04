@@ -1,13 +1,6 @@
 import * as vscode from 'vscode';
 import { SpaceDefinition } from '../models';
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+import { escapeHtml } from './htmlEscape';
 
 /**
  * Read-only view of a Kibana Space fetched live from a connection. Unlike the structured

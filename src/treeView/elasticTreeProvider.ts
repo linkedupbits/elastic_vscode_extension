@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { decodeCloudId } from '../connections/cloudId';
 import { getApiKey } from '../connections/connectionManager';
-import { fetchSpaces } from '../connections/kibanaClient';
+import { fetchAgentPolicies, fetchSpaces } from '../connections/kibanaClient';
 import { NoWorkspaceError } from '../config';
 import { readJsonFile } from '../fileSystem';
 import { ConnectionDefinition } from '../models';
@@ -119,9 +119,17 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
               filePath: element.filePath,
               connectionId: element.connectionId,
             }),
+            new ElasticTreeItem('Fleet Agent Policies', vscode.TreeItemCollapsibleState.Collapsed, {
+              contextValue: 'connection-agentpolicies',
+              iconPath: new vscode.ThemeIcon('checklist'),
+              filePath: element.filePath,
+              connectionId: element.connectionId,
+            }),
           ];
         case 'connection-spaces':
           return await this.getLiveSpaceItems(element);
+        case 'connection-agentpolicies':
+          return await this.getLiveAgentPolicyItems(element);
         case 'category-proxies':
           return await this.getProxyItems();
         case 'category-downloadsources':
@@ -208,7 +216,18 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     });
   }
 
-  private async getLiveSpaceItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
+  /**
+   * Shared shape behind every "live" tree node under a connection: resolve its stored API key
+   * (bailing out with a message item if there isn't one), decode the connection's Cloud ID,
+   * fetch `items` from the deployment, and turn each into a leaf `ElasticTreeItem` via `toItem`
+   * - or a message item if the fetch itself fails. `noun` only affects wording of that message.
+   */
+  private async getLiveItems<T>(
+    element: ElasticTreeItem,
+    noun: string,
+    fetchItems: (kibanaUrl: string, apiKey: string) => Promise<T[]>,
+    toItem: (item: T, connectionName: string) => ElasticTreeItem
+  ): Promise<ElasticTreeItem[]> {
     const connectionFilePath = element.filePath as string;
     const connectionId = element.connectionId as string;
 
@@ -220,24 +239,42 @@ export class ElasticTreeProvider implements vscode.TreeDataProvider<ElasticTreeI
     try {
       const connection = await readJsonFile<ConnectionDefinition>(connectionFilePath);
       const { kibanaUrl } = decodeCloudId(connection.cloudId);
-      const spaces = await fetchSpaces(kibanaUrl, apiKey);
-      return spaces.map(
-        (space) =>
-          new ElasticTreeItem(space.name, vscode.TreeItemCollapsibleState.None, {
-            contextValue: 'connection-space',
-            iconPath: new vscode.ThemeIcon('symbol-namespace'),
-            description: space.id,
-            command: {
-              command: 'elasticSource.openLiveSpace',
-              title: 'Open',
-              arguments: [{ connectionName: connection.name, space }],
-            },
-          })
-      );
+      const items = await fetchItems(kibanaUrl, apiKey);
+      return items.map((item) => toItem(item, connection.name));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return [this.buildMessageItem(`Failed to fetch spaces: ${message}`, 'error', message)];
+      return [this.buildMessageItem(`Failed to fetch ${noun}: ${message}`, 'error', message)];
     }
+  }
+
+  private async getLiveSpaceItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
+    return this.getLiveItems(element, 'spaces', fetchSpaces, (space, connectionName) => {
+      return new ElasticTreeItem(space.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'connection-space',
+        iconPath: new vscode.ThemeIcon('symbol-namespace'),
+        description: space.id,
+        command: {
+          command: 'elasticSource.openLiveSpace',
+          title: 'Open',
+          arguments: [{ connectionName, space }],
+        },
+      });
+    });
+  }
+
+  private async getLiveAgentPolicyItems(element: ElasticTreeItem): Promise<ElasticTreeItem[]> {
+    return this.getLiveItems(element, 'agent policies', fetchAgentPolicies, (policy, connectionName) => {
+      return new ElasticTreeItem(policy.name, vscode.TreeItemCollapsibleState.None, {
+        contextValue: 'connection-agentpolicy',
+        iconPath: new vscode.ThemeIcon('checklist'),
+        description: policy.namespace,
+        command: {
+          command: 'elasticSource.openLiveAgentPolicy',
+          title: 'Open',
+          arguments: [{ connectionName, policy }],
+        },
+      });
+    });
   }
 
   private async getProxyItems(): Promise<ElasticTreeItem[]> {

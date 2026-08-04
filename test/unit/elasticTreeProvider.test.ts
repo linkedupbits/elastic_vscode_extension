@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { storeApiKey } from '../../src/connections/connectionManager';
-import { fetchSpaces } from '../../src/connections/kibanaClient';
+import { fetchAgentPolicies, fetchSpaces } from '../../src/connections/kibanaClient';
 import { generateId } from '../../src/fileSystem';
-import { SpaceDefinition } from '../../src/models';
+import { FleetAgentPolicy, SpaceDefinition } from '../../src/models';
 import {
   saveConnection,
   saveFleetAgentPolicy,
@@ -24,6 +24,7 @@ import { vscodeMock } from '../helpers/vscodeMock';
 
 jest.mock('../../src/connections/kibanaClient');
 const mockFetchSpaces = fetchSpaces as jest.MockedFunction<typeof fetchSpaces>;
+const mockFetchAgentPolicies = fetchAgentPolicies as jest.MockedFunction<typeof fetchAgentPolicies>;
 
 const VALID_CLOUD_ID = `staging:${Buffer.from('us-east-1.aws.found.io$abcd1234$efgh5678', 'utf8').toString(
   'base64'
@@ -40,6 +41,7 @@ describe('ElasticTreeProvider', () => {
     secrets = new vscodeMock.MockSecretStorage();
     provider = new ElasticTreeProvider(secrets);
     mockFetchSpaces.mockReset();
+    mockFetchAgentPolicies.mockReset();
   });
 
   afterEach(() => {
@@ -568,18 +570,21 @@ describe('ElasticTreeProvider', () => {
       expect(command.arguments[0]).toEqual({ artifactType: 'connection', filePath: item.filePath });
     });
 
-    it('expanding a connection shows exactly one "Spaces" node', async () => {
+    it('expanding a connection shows a "Spaces" node and a "Fleet Agent Policies" node', async () => {
       await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
 
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-connections')!;
       const [connectionItem] = await provider.getChildren(category);
-      const spacesChildren = await provider.getChildren(connectionItem);
+      const connectionChildren = await provider.getChildren(connectionItem);
 
-      expect(spacesChildren).toHaveLength(1);
-      expect(spacesChildren[0].label).toBe('Spaces');
-      expect(spacesChildren[0].contextValue).toBe('connection-spaces');
-      expect(spacesChildren[0].collapsibleState).toBe(1);
+      expect(connectionChildren).toHaveLength(2);
+      expect(connectionChildren.map((c) => c.contextValue)).toEqual([
+        'connection-spaces',
+        'connection-agentpolicies',
+      ]);
+      expect(connectionChildren.map((c) => c.label)).toEqual(['Spaces', 'Fleet Agent Policies']);
+      expect(connectionChildren.every((c) => c.collapsibleState === 1)).toBe(true);
     });
 
     it('shows a message item when no api key is stored for the connection', async () => {
@@ -588,13 +593,21 @@ describe('ElasticTreeProvider', () => {
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-connections')!;
       const [connectionItem] = await provider.getChildren(category);
-      const [spacesNode] = await provider.getChildren(connectionItem);
+      const connectionChildren = await provider.getChildren(connectionItem);
+      const spacesNode = connectionChildren.find((c) => c.contextValue === 'connection-spaces')!;
+      const agentPoliciesNode = connectionChildren.find((c) => c.contextValue === 'connection-agentpolicies')!;
       const spaceItems = await provider.getChildren(spacesNode);
+      const agentPolicyItems = await provider.getChildren(agentPoliciesNode);
 
       expect(spaceItems).toHaveLength(1);
       expect(spaceItems[0].contextValue).toBe('message');
       expect(spaceItems[0].label).toBe('No API key stored for this connection.');
       expect(mockFetchSpaces).not.toHaveBeenCalled();
+
+      expect(agentPolicyItems).toHaveLength(1);
+      expect(agentPolicyItems[0].contextValue).toBe('message');
+      expect(agentPolicyItems[0].label).toBe('No API key stored for this connection.');
+      expect(mockFetchAgentPolicies).not.toHaveBeenCalled();
     });
 
     it('lists live spaces fetched from the deployment as leaves with an open command', async () => {
@@ -609,7 +622,8 @@ describe('ElasticTreeProvider', () => {
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-connections')!;
       const [connectionItem] = await provider.getChildren(category);
-      const [spacesNode] = await provider.getChildren(connectionItem);
+      const connectionChildren = await provider.getChildren(connectionItem);
+      const spacesNode = connectionChildren.find((c) => c.contextValue === 'connection-spaces')!;
       const spaceItems = await provider.getChildren(spacesNode);
 
       expect(mockFetchSpaces).toHaveBeenCalledWith('https://efgh5678.us-east-1.aws.found.io', 'my-api-key');
@@ -623,7 +637,7 @@ describe('ElasticTreeProvider', () => {
       expect(command.arguments[0]).toEqual({ connectionName: 'Staging', space: spaces[0] });
     });
 
-    it('shows a message item with the error when the fetch fails', async () => {
+    it('shows a message item with the error when the spaces fetch fails', async () => {
       await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
       await storeApiKey(secrets, 'conn-1', 'my-api-key');
       mockFetchSpaces.mockRejectedValue(new Error('Failed to fetch spaces (401 Unauthorized).'));
@@ -631,12 +645,71 @@ describe('ElasticTreeProvider', () => {
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-connections')!;
       const [connectionItem] = await provider.getChildren(category);
-      const [spacesNode] = await provider.getChildren(connectionItem);
+      const connectionChildren = await provider.getChildren(connectionItem);
+      const spacesNode = connectionChildren.find((c) => c.contextValue === 'connection-spaces')!;
       const spaceItems = await provider.getChildren(spacesNode);
 
       expect(spaceItems).toHaveLength(1);
       expect(spaceItems[0].contextValue).toBe('message');
       expect(spaceItems[0].label).toBe('Failed to fetch spaces: Failed to fetch spaces (401 Unauthorized).');
+    });
+
+    it('lists live agent policies fetched from the deployment as leaves with an open command', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+      await storeApiKey(secrets, 'conn-1', 'my-api-key');
+      const policies: FleetAgentPolicy[] = [
+        {
+          id: 'policy-1',
+          name: 'CMT Default',
+          description: '',
+          monitoring_enabled: ['logs'],
+          inactivity_timeout: 1209600,
+          download_source_id: '',
+          schema_version: '1.1.0',
+          namespace: 'default',
+          advanced_settings: {},
+        },
+      ];
+      mockFetchAgentPolicies.mockResolvedValue(policies);
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const connectionChildren = await provider.getChildren(connectionItem);
+      const agentPoliciesNode = connectionChildren.find((c) => c.contextValue === 'connection-agentpolicies')!;
+      const agentPolicyItems = await provider.getChildren(agentPoliciesNode);
+
+      expect(mockFetchAgentPolicies).toHaveBeenCalledWith(
+        'https://efgh5678.us-east-1.aws.found.io',
+        'my-api-key'
+      );
+      expect(agentPolicyItems).toHaveLength(1);
+      expect(agentPolicyItems[0].label).toBe('CMT Default');
+      expect(agentPolicyItems[0].contextValue).toBe('connection-agentpolicy');
+      expect(agentPolicyItems[0].description).toBe('default');
+      expect(agentPolicyItems[0].collapsibleState).toBe(0);
+      const command = agentPolicyItems[0].command as unknown as { command: string; arguments: unknown[] };
+      expect(command.command).toBe('elasticSource.openLiveAgentPolicy');
+      expect(command.arguments[0]).toEqual({ connectionName: 'Staging', policy: policies[0] });
+    });
+
+    it('shows a message item with the error when the agent policies fetch fails', async () => {
+      await saveConnection(undefined, { id: 'conn-1', name: 'Staging', cloudId: VALID_CLOUD_ID });
+      await storeApiKey(secrets, 'conn-1', 'my-api-key');
+      mockFetchAgentPolicies.mockRejectedValue(new Error('Failed to fetch agent policies (403 Forbidden).'));
+
+      const children = await provider.getChildren();
+      const category = children.find((c) => c.contextValue === 'category-connections')!;
+      const [connectionItem] = await provider.getChildren(category);
+      const connectionChildren = await provider.getChildren(connectionItem);
+      const agentPoliciesNode = connectionChildren.find((c) => c.contextValue === 'connection-agentpolicies')!;
+      const agentPolicyItems = await provider.getChildren(agentPoliciesNode);
+
+      expect(agentPolicyItems).toHaveLength(1);
+      expect(agentPolicyItems[0].contextValue).toBe('message');
+      expect(agentPolicyItems[0].label).toBe(
+        'Failed to fetch agent policies: Failed to fetch agent policies (403 Forbidden).'
+      );
     });
   });
 

@@ -137,6 +137,11 @@
         "category": "Elastic Source"
       },
       {
+        "command": "elasticSource.openLiveAgentPolicy",
+        "title": "Open Agent Policy",
+        "category": "Elastic Source"
+      },
+      {
         "command": "elasticSource.deleteArtifact",
         "title": "Delete",
         "icon": "$(trash)",
@@ -241,6 +246,10 @@
         },
         {
           "command": "elasticSource.openLiveSpace",
+          "when": "false"
+        },
+        {
+          "command": "elasticSource.openLiveAgentPolicy",
           "when": "false"
         },
         {

@@ -9,6 +9,7 @@ import { IlmPolicyEditorPanel } from './editors/ilmPolicyEditorPanel';
 import { IndexTemplateEditorPanel } from './editors/indexTemplateEditorPanel';
 import { IngestPipelineEditorPanel } from './editors/ingestPipelineEditorPanel';
 import { IntegrationPolicyEditorPanel } from './editors/integrationPolicyEditorPanel';
+import { LiveAgentPolicyViewPanel } from './editors/liveAgentPolicyViewPanel';
 import { LiveSpaceViewPanel } from './editors/liveSpaceViewPanel';
 import { ProxyEditorPanel } from './editors/proxyEditorPanel';
 import { RoleEditorPanel } from './editors/roleEditorPanel';
@@ -33,7 +34,7 @@ import {
   deleteSpace,
 } from './repositories';
 import { readJsonFile } from './fileSystem';
-import { IntegrationPolicy, SpaceDefinition } from './models';
+import { FleetAgentPolicy, IntegrationPolicy, SpaceDefinition } from './models';
 
 function reportIfNoWorkspace(err: unknown): boolean {
   if (err instanceof NoWorkspaceError) {
@@ -191,6 +192,13 @@ export function activate(context: vscode.ExtensionContext): void {
       'elasticSource.openLiveSpace',
       (args: { connectionName: string; space: SpaceDefinition }) => {
         LiveSpaceViewPanel.open(context.extensionUri, args.connectionName, args.space);
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      'elasticSource.openLiveAgentPolicy',
+      (args: { connectionName: string; policy: FleetAgentPolicy }) => {
+        LiveAgentPolicyViewPanel.open(context.extensionUri, args.connectionName, args.policy);
       }
     ),
 

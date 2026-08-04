@@ -24,8 +24,8 @@ other code.
 - The one exception is the **Connections** category: register an Elastic Cloud deployment
   (Cloud ID + API Key) to browse its *live* data. The API key is stored in VS Code's
   [SecretStorage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage) -
-  never written to disk - and is used to fetch that deployment's Kibana Spaces on demand,
-  shown read-only under the connection in the tree.
+  never written to disk - and is used to fetch that deployment's Kibana Spaces and Fleet
+  Agent Policies on demand, shown read-only under the connection in the tree.
 
 ![alt text](docs/explorer.png)
 
@@ -60,9 +60,12 @@ Unlike the artifact types above, a Connection isn't applied to a deployment - it
 *this extension* uses to talk to one. Its JSON file only ever holds non-secret metadata
 (`id`, `name`, `cloudId`); the API key you enter is stored in VS Code's SecretStorage, keyed
 by the connection's `id`, and is never written to the file. Expanding a connection in the
-tree fetches its Spaces live from that deployment's Kibana
-([Get All Spaces](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space))
-and shows them read-only - they aren't saved locally.
+tree shows two live nodes, each fetched from that deployment on expand and shown read-only -
+neither is saved locally:
+- **Spaces**, via Kibana's
+  [Get All Spaces](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-spaces-space) API.
+- **Fleet Agent Policies**, via Kibana's
+  [Get Agent Policies](https://www.elastic.co/docs/api/doc/kibana/operation/operation-get-fleet-agent-policies) API.
 
 See [`claude.md`](claude.md) for the full field-by-field breakdown of every artifact type,
 including which fields are curated into structured controls vs. left as JSON escape hatches
