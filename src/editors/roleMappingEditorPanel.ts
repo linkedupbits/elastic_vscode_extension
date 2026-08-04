@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readJsonFile, validateArtifactName } from '../fileSystem';
+import { validateArtifactName } from '../fileSystem';
 import { parseOptionalJsonObject, toStringArray } from '../roles/rolePrivilegeTemplates';
 import {
   buildRoleTemplatesJson,
@@ -7,7 +7,7 @@ import {
   RoleTemplateFormValue,
 } from '../roleMappings/roleTemplateRowTemplate';
 import { RoleMappingDefinition } from '../models';
-import { saveRoleMapping } from '../repositories';
+import { loadRoleMapping, saveRoleMapping } from '../repositories';
 import { ArtifactPanelBase } from './artifactPanelBase';
 
 interface RoleMappingFormItem {
@@ -101,7 +101,7 @@ export class RoleMappingEditorPanel extends ArtifactPanelBase {
 
   protected async loadInitialPayload(): Promise<RoleMappingPayload> {
     if (this.filePath) {
-      const item = await readJsonFile<RoleMappingDefinition>(this.filePath);
+      const item = await loadRoleMapping(this.filePath);
       return {
         isNew: false,
         item: {

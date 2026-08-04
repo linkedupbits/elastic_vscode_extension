@@ -482,7 +482,7 @@ describe('ElasticTreeProvider', () => {
     it('treats a legacy/malformed file with no roles/role_templates key as an empty-count description', async () => {
       const roleMappingsDir = path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings');
       fs.mkdirSync(roleMappingsDir, { recursive: true });
-      fs.writeFileSync(path.join(roleMappingsDir, 'legacy-mapping.json'), JSON.stringify({ name: 'legacy-mapping' }));
+      fs.writeFileSync(path.join(roleMappingsDir, 'legacy-mapping.json'), JSON.stringify({ 'legacy-mapping': {} }));
 
       const children = await provider.getChildren();
       const category = children.find((c) => c.contextValue === 'category-rolemappings')!;

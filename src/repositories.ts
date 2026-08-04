@@ -31,6 +31,7 @@ import {
   NamedRef,
   RoleDefinition,
   RoleMappingDefinition,
+  RoleMappingFile,
 } from './models';
 
 export interface LoadedArtifact<T> {
@@ -378,12 +379,28 @@ export async function deleteRole(filePath: string): Promise<void> {
 }
 
 // ---------- Role Mappings ----------
-// Each lives as a *.json file named after its own `name` attribute.
+// Each lives as a *.json file named after its own `name` attribute. On disk, the name is
+// stored as the file's root JSON key (matching the Elasticsearch Get Role Mapping API
+// response shape) rather than as a `name` field in the body - see `RoleMappingFile`.
+
+function roleMappingFromFile(file: RoleMappingFile): RoleMappingDefinition {
+  const [name, definition] = Object.entries(file)[0];
+  return { name, ...definition };
+}
+
+function roleMappingToFile(data: RoleMappingDefinition): RoleMappingFile {
+  const { name, ...definition } = data;
+  return { [name]: definition };
+}
+
+export async function loadRoleMapping(filePath: string): Promise<RoleMappingDefinition> {
+  return roleMappingFromFile(await readJsonFile<RoleMappingFile>(filePath));
+}
 
 export async function listRoleMappings(): Promise<LoadedArtifact<RoleMappingDefinition>[]> {
   const files = await listJsonFiles(getRoleMappingsDir());
   const items = await Promise.all(
-    files.map(async (filePath) => ({ filePath, data: await readJsonFile<RoleMappingDefinition>(filePath) }))
+    files.map(async (filePath) => ({ filePath, data: await loadRoleMapping(filePath) }))
   );
   return items.sort((a, b) => a.data.name.localeCompare(b.data.name));
 }
@@ -402,7 +419,7 @@ export async function saveRoleMapping(
     throw new ArtifactConflictError(`A Role Mapping named "${data.name}" already exists.`);
   }
 
-  await writeJsonFile(targetFile, data);
+  await writeJsonFile(targetFile, roleMappingToFile(data));
   if (existingFilePath && existingFilePath !== targetFile) {
     await deleteFile(existingFilePath);
   }

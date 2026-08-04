@@ -1,0 +1,12 @@
+{
+  "A Role Mapping": {
+    "roles": [
+      "cmt_read"
+    ],
+    "rules": {
+      "field": {
+        "username": "*"
+      }
+    }
+  }
+}

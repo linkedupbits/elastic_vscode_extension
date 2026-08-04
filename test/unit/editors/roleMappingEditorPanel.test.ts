@@ -116,7 +116,7 @@ describe('RoleMappingEditorPanel', () => {
     const roleMappingsDir = path.join(workspaceRoot, 'Elastic_Source', 'Role_Mappings');
     fs.mkdirSync(roleMappingsDir, { recursive: true });
     const filePath = path.join(roleMappingsDir, 'legacy-mapping.json');
-    fs.writeFileSync(filePath, JSON.stringify({ name: 'legacy-mapping', roles: ['cmt_read_only'] }));
+    fs.writeFileSync(filePath, JSON.stringify({ 'legacy-mapping': { roles: ['cmt_read_only'] } }));
 
     RoleMappingEditorPanel.openExisting(extensionUri, () => undefined, filePath);
     const payload = (await sendReady()) as { item: { rules: string } };

@@ -182,7 +182,8 @@ export interface RoleDefinition {
  * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-put-role-mapping).
  * Maps directly onto the real API body - there's no wrapper key - except for `name`, which
  * isn't part of the body (it's the URL path segment) but is kept here since it drives the
- * saved file name. `role_templates` is left as `Record<string, unknown>[]` since its shape is
+ * saved file name and (per `RoleMappingFile` below) the saved file's root JSON key.
+ * `role_templates` is left as `Record<string, unknown>[]` since its shape is
  * enforced/documented by ../roleMappings/roleTemplateRowTemplate.ts's form-value interface
  * instead. `rules` is left free-form: it's a recursive boolean expression tree (`field`,
  * `except`, `all`, `any`) whose shape is open-ended, much like a Query DSL object elsewhere in
@@ -197,3 +198,11 @@ export interface RoleMappingDefinition {
   rules: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * On-disk shape of a Role Mapping file. Unlike `RoleMappingDefinition`, the name is stored as
+ * the single root JSON key rather than a `name` field, matching the shape Elasticsearch's own
+ * Get Role Mapping API returns
+ * (https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-get-role-mapping).
+ */
+export type RoleMappingFile = Record<string, Omit<RoleMappingDefinition, 'name'>>;
