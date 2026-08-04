@@ -22,15 +22,13 @@ Fixing this needs a space field added to the downloaded `FleetAgentPolicy` file 
 (`src/repositories.ts`). Low priority until someone actually hits an id collision across spaces
 in practice.
 
-### Live Fleet fetches don't paginate past 100 items
-
-`fetchAgentPolicies`/`fetchPackagePolicies` (`src/connections/kibanaClient.ts`) each request a
-single `perPage=100` page rather than following the Fleet API's pagination - per space, now that
-Agent Policies are fetched per Kibana Space. A deployment with more than 100 agent policies or
-integration policies in one space will silently show only the first page in the tree. Acceptable
-for the read-only browse view this was built for; revisit if it turns out to matter for larger
-real deployments.
-
 ## Resolved
 
-(move an entry here with a one-line "fixed by <commit/PR>" note, or just delete it, once closed)
+### Live Fleet fetches don't paginate past 100 items
+
+`fetchAgentPolicies`/`fetchPackagePolicies` (`src/connections/kibanaClient.ts`) used to request a
+single `perPage=100` page rather than following the Fleet API's pagination. Fixed by
+`fetchAllPages` (`src/connections/kibanaClient.ts`), a shared helper both functions now go
+through: it keeps requesting `page=1`, `page=2`, ... until the accumulated item count reaches the
+response's `total`, or a page comes back short (fewer than `perPage` items, a safety net for a
+deployment that never reports `total`). Applies per space, same as before.

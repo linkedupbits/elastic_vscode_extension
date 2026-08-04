@@ -100,7 +100,7 @@ describe('fetchAgentPolicies', () => {
     const result = await fetchAgentPolicies('https://example.kb.io', 'my-api-key');
 
     expect(result).toEqual(policies);
-    expect(mockFetch).toHaveBeenCalledWith('https://example.kb.io/api/fleet/agent_policies?perPage=100', {
+    expect(mockFetch).toHaveBeenCalledWith('https://example.kb.io/api/fleet/agent_policies?perPage=100&page=1', {
       headers: {
         Authorization: 'ApiKey my-api-key',
         'kbn-xsrf': 'true',
@@ -120,7 +120,7 @@ describe('fetchAgentPolicies', () => {
     await fetchAgentPolicies('https://example.kb.io/', 'my-api-key');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.kb.io/api/fleet/agent_policies?perPage=100',
+      'https://example.kb.io/api/fleet/agent_policies?perPage=100&page=1',
       expect.anything()
     );
   });
@@ -160,7 +160,7 @@ describe('fetchAgentPolicies', () => {
     await fetchAgentPolicies('https://example.kb.io', 'my-api-key', 'marketing');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.kb.io/s/marketing/api/fleet/agent_policies?perPage=100',
+      'https://example.kb.io/s/marketing/api/fleet/agent_policies?perPage=100&page=1',
       expect.anything()
     );
   });
@@ -177,9 +177,60 @@ describe('fetchAgentPolicies', () => {
     await fetchAgentPolicies('https://example.kb.io', 'my-api-key', 'default');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.kb.io/api/fleet/agent_policies?perPage=100',
+      'https://example.kb.io/api/fleet/agent_policies?perPage=100&page=1',
       expect.anything()
     );
+  });
+
+  it('follows pagination across multiple pages until `total` is reached', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => agentPolicyFixture({ id: `policy-${i}` }));
+    const page2 = Array.from({ length: 50 }, (_, i) => agentPolicyFixture({ id: `policy-${100 + i}` }));
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({ items: page1, total: 150, page: 1, perPage: 100 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({ items: page2, total: 150, page: 2, perPage: 100 }),
+      });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await fetchAgentPolicies('https://example.kb.io', 'my-api-key', 'marketing');
+
+    expect(result).toEqual([...page1, ...page2]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      'https://example.kb.io/s/marketing/api/fleet/agent_policies?perPage=100&page=1',
+      expect.anything()
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://example.kb.io/s/marketing/api/fleet/agent_policies?perPage=100&page=2',
+      expect.anything()
+    );
+  });
+
+  it('stops after a single short page even when `total` is missing from the response', async () => {
+    const policies = [agentPolicyFixture()];
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ items: policies }),
+    });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await fetchAgentPolicies('https://example.kb.io', 'my-api-key');
+
+    expect(result).toEqual(policies);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -219,7 +270,7 @@ describe('fetchPackagePolicies', () => {
     const result = await fetchPackagePolicies('https://example.kb.io', 'my-api-key');
 
     expect(result).toEqual(policies);
-    expect(mockFetch).toHaveBeenCalledWith('https://example.kb.io/api/fleet/package_policies?perPage=100', {
+    expect(mockFetch).toHaveBeenCalledWith('https://example.kb.io/api/fleet/package_policies?perPage=100&page=1', {
       headers: {
         Authorization: 'ApiKey my-api-key',
         'kbn-xsrf': 'true',
@@ -239,7 +290,7 @@ describe('fetchPackagePolicies', () => {
     await fetchPackagePolicies('https://example.kb.io/', 'my-api-key');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.kb.io/api/fleet/package_policies?perPage=100',
+      'https://example.kb.io/api/fleet/package_policies?perPage=100&page=1',
       expect.anything()
     );
   });
@@ -279,7 +330,37 @@ describe('fetchPackagePolicies', () => {
     await fetchPackagePolicies('https://example.kb.io', 'my-api-key', 'marketing');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.kb.io/s/marketing/api/fleet/package_policies?perPage=100',
+      'https://example.kb.io/s/marketing/api/fleet/package_policies?perPage=100&page=1',
+      expect.anything()
+    );
+  });
+
+  it('follows pagination across multiple pages until `total` is reached', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => packagePolicyFixture({ id: `integration-${i}` }));
+    const page2 = Array.from({ length: 1 }, (_, i) => packagePolicyFixture({ id: `integration-${100 + i}` }));
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({ items: page1, total: 101, page: 1, perPage: 100 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({ items: page2, total: 101, page: 2, perPage: 100 }),
+      });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await fetchPackagePolicies('https://example.kb.io', 'my-api-key');
+
+    expect(result).toEqual([...page1, ...page2]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://example.kb.io/api/fleet/package_policies?perPage=100&page=2',
       expect.anything()
     );
   });
